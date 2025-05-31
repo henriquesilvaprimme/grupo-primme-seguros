@@ -16,19 +16,62 @@ const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZt
 const App = () => {
   const navigate = useNavigate();
 
+  // --- Autenticação ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginInput, setLoginInput] = useState('');
   const [senhaInput, setSenhaInput] = useState('');
   const [usuarioLogado, setUsuarioLogado] = useState(null);
 
-  // INÍCIO - sincronização leads via Google Sheets
+  // --- Leads e usuários ---
   const [leads, setLeads] = useState([]);
-  const [leadSelecionado, setLeadSelecionado] = useState(null); // movido para cá para usar no useEffect
-
-  // NOVO ESTADO para leads não atribuídos (busca via endpoint atualizado)
+  const [leadSelecionado, setLeadSelecionado] = useState(null);
   const [leadsNaoAtribuidos, setLeadsNaoAtribuidos] = useState([]);
 
+  const [usuarios, setUsuarios] = useState([
+    {
+      id: 1,
+      usuario: '1', // login
+      nome: 'Administrador 1',
+      email: 'admin1@example.com',
+      senha: '1',
+      status: 'Ativo',
+      tipo: 'Admin',
+    },
+    {
+      id: 2,
+      usuario: 'maria',
+      nome: 'Maria Oliveira',
+      email: 'maria@example.com',
+      senha: 'senha123',
+      status: 'Ativo',
+      tipo: 'Usuario',
+    },
+    {
+      id: 3,
+      usuario: 'joao',
+      nome: 'João Souza',
+      email: 'joao@example.com',
+      senha: 'joaopass',
+      status: 'Ativo',
+      tipo: 'Usuario',
+    },
+    {
+      id: 4,
+      usuario: 'admin2',
+      nome: 'Administrador 2',
+      email: 'admin2@example.com',
+      senha: 'adminpass',
+      status: 'Ativo',
+      tipo: 'Admin',
+    },
+  ]);
+
+  // Para identificar o último lead fechado (para destacar)
+  const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
+
+  // --- Efeito para sincronizar leads com Google Sheets ---
   useEffect(() => {
+    // Função para buscar todos os leads
     const fetchLeadsFromSheet = async () => {
       try {
         const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getLeads');
@@ -54,7 +97,7 @@ const App = () => {
             createdAt: item.createdAt || new Date().toISOString(),
           }));
 
-          // Só atualiza leads se não houver lead selecionado para não atrapalhar o usuário
+          // Atualiza leads só se não houver lead selecionado, para não atrapalhar a edição
           if (!leadSelecionado) {
             setLeads(formattedLeads);
           }
@@ -71,11 +114,12 @@ const App = () => {
       }
     };
 
-    // FUNÇÃO NOVA para buscar leads não atribuídos via endpoint Google Apps Script
+    // Função para buscar leads não atribuídos via Google Apps Script (POST)
     const fetchLeadsNaoAtribuidos = async () => {
       try {
-        const url = GOOGLE_SHEETS_SCRIPT_URL + '?acao=listarLeadsNaoAtribuidos';
-        const response = await fetch(url, { method: 'POST' });
+        const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?acao=listarLeadsNaoAtribuidos', {
+          method: 'POST',
+        });
         const data = await response.json();
 
         if (data.status === 'ok') {
@@ -92,6 +136,7 @@ const App = () => {
     fetchLeadsFromSheet();
     fetchLeadsNaoAtribuidos();
 
+    // Atualiza a cada 5 segundos
     const interval = setInterval(() => {
       fetchLeadsFromSheet();
       fetchLeadsNaoAtribuidos();
@@ -99,48 +144,8 @@ const App = () => {
 
     return () => clearInterval(interval);
   }, [leadSelecionado]);
-  // FIM - sincronização leads
 
-  const [usuarios, setUsuarios] = useState([
-    {
-      id: 1,
-      usuario: '1', // login
-      nome: 'Administrador 1',
-      email: 'admin1@example.com',
-      senha: '1',
-      status: 'Ativo',
-      tipo: 'Admin',
-    },
-    {
-      id: 2,
-      usuario: 'maria', // login
-      nome: 'Maria Oliveira',
-      email: 'maria@example.com',
-      senha: 'senha123',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 3,
-      usuario: 'joao', // login
-      nome: 'João Souza',
-      email: 'joao@example.com',
-      senha: 'joaopass',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 4,
-      usuario: 'admin2', // login
-      nome: 'Administrador 2',
-      email: 'admin2@example.com',
-      senha: 'adminpass',
-      status: 'Ativo',
-      tipo: 'Admin',
-    },
-  ]);
-
-  const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
+  // --- Funções para manipular usuários e leads ---
 
   const adicionarUsuario = (usuario) => {
     setUsuarios((prev) => [...prev, { ...usuario, id: prev.length + 1 }]);
@@ -160,33 +165,25 @@ const App = () => {
 
   const atualizarSeguradoraLead = (id, seguradora) => {
     setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === id ? { ...lead, insurer: seguradora } : lead
-      )
+      prev.map((lead) => (lead.id === id ? { ...lead, insurer: seguradora } : lead))
     );
   };
 
   const confirmarSeguradoraLead = (id) => {
     setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === id ? { ...lead, insurerConfirmed: true } : lead
-      )
+      prev.map((lead) => (lead.id === id ? { ...lead, insurerConfirmed: true } : lead))
     );
   };
 
   const atualizarDetalhesLeadFechado = (id, campo, valor) => {
     setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === id ? { ...lead, [campo]: valor } : lead
-      )
+      prev.map((lead) => (lead.id === id ? { ...lead, [campo]: valor } : lead))
     );
   };
 
   const transferirLead = (leadId, usuarioId) => {
     setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === leadId ? { ...lead, usuarioId } : lead
-      )
+      prev.map((lead) => (lead.id === leadId ? { ...lead, usuarioId } : lead))
     );
   };
 
@@ -214,6 +211,7 @@ const App = () => {
     navigate(path);
   };
 
+  // --- Login ---
   const handleLogin = () => {
     const usuarioEncontrado = usuarios.find(
       (u) => u.usuario === loginInput && u.senha === senhaInput && u.status === 'Ativo'
@@ -227,6 +225,7 @@ const App = () => {
     }
   };
 
+  // --- Render login se não autenticado ---
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-100 to-indigo-200">
@@ -259,6 +258,7 @@ const App = () => {
 
   const isAdmin = usuarioLogado?.tipo === 'Admin';
 
+  // --- Render principal após login ---
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       <Sidebar isAdmin={isAdmin} nomeUsuario={loginInput} />
@@ -270,11 +270,7 @@ const App = () => {
             path="/dashboard"
             element={
               <Dashboard
-                leads={
-                  isAdmin
-                    ? leads
-                    : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)
-                }
+                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
               />
             }
           />
@@ -287,7 +283,8 @@ const App = () => {
                 onUpdateStatus={atualizarStatusLead}
                 transferirLead={transferirLead}
                 usuarioLogado={usuarioLogado}
-                leadsNaoAtribuidos={leadsNaoAtribuidos} // se quiser usar na aba leads
+                leadsNaoAtribuidos={leadsNaoAtribuidos} // Disponível para uso na aba Leads
+                onAbrirLead={onAbrirLead}
               />
             }
           />
