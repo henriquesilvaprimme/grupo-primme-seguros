@@ -21,131 +21,103 @@ const App = () => {
   const [senhaInput, setSenhaInput] = useState('');
   const [usuarioLogado, setUsuarioLogado] = useState(null);
 
-  // Leads estado inicial vazio; será carregado do GAS
+  // INÍCIO - sincronização leads via Google Sheets
   const [leads, setLeads] = useState([]);
-  
+  const [leadSelecionado, setLeadSelecionado] = useState(null); // movido para cá para usar no useEffect
+
+  useEffect(() => {
+    const fetchLeadsFromSheet = async () => {
+      try {
+        const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getLeads');
+        const data = await response.json();
+
+        if (Array.isArray(data)) {
+          const formattedLeads = data.map((item, index) => ({
+            id: item.id ? Number(item.id) : index + 1,
+            name: item.name || item.Name || '',
+            vehicleModel: item.vehiclemodel || item.vehicleModel || '',
+            vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
+            city: item.city || '',
+            phone: item.phone || item.Telefone || '',
+            insuranceType: item.insuranceType || '',
+            status: item.status || 'Selecione o status',
+            confirmado: item.confirmado === 'true' || item.confirmado === true,
+            insurer: item.insurer || '',
+            insurerConfirmed: item.insurerConfirmed === 'true' || item.insurerConfirmed === true,
+            usuarioId: item.usuarioId ? Number(item.usuarioId) : null,
+            premioLiquido: item.premioLiquido || '',
+            comissao: item.comissao || '',
+            parcelamento: item.parcelamento || '',
+            createdAt: item.createdAt || new Date().toISOString(),
+          }));
+
+          // Só atualiza leads se não houver lead selecionado para não atrapalhar o usuário
+          if (!leadSelecionado) {
+            setLeads(formattedLeads);
+          }
+        } else {
+          if (!leadSelecionado) {
+            setLeads([]);
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao buscar leads do Google Sheets:', error);
+        if (!leadSelecionado) {
+          setLeads([]);
+        }
+      }
+    };
+
+    fetchLeadsFromSheet();
+
+    const interval = setInterval(() => {
+      fetchLeadsFromSheet();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [leadSelecionado]);
+  // FIM - sincronização leads
+
   const [usuarios, setUsuarios] = useState([
     {
       id: 1,
-      usuario: '1',
+      usuario: '1', // login
       nome: 'Administrador 1',
       email: 'admin1@example.com',
       senha: '1',
       status: 'Ativo',
       tipo: 'Admin',
     },
-    // ... (restante dos usuarios)
+    {
+      id: 2,
+      usuario: 'maria', // login
+      nome: 'Maria Oliveira',
+      email: 'maria@example.com',
+      senha: 'senha123',
+      status: 'Ativo',
+      tipo: 'Usuario',
+    },
+    {
+      id: 3,
+      usuario: 'joao', // login
+      nome: 'João Souza',
+      email: 'joao@example.com',
+      senha: 'joaopass',
+      status: 'Ativo',
+      tipo: 'Usuario',
+    },
+    {
+      id: 4,
+      usuario: 'admin2', // login
+      nome: 'Administrador 2',
+      email: 'admin2@example.com',
+      senha: 'adminpass',
+      status: 'Ativo',
+      tipo: 'Admin',
+    },
   ]);
 
   const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
-  const [leadSelecionado, setLeadSelecionado] = useState(null);
-
-  // --- Buscar leads não atribuídos do GAS ao iniciar o app ---
-  useEffect(() => {
-    const fetchLeadsNaoAtribuidos = async () => {
-      try {
-        const url = `${GOOGLE_SHEETS_SCRIPT_URL}?acao=listarLeadsNaoAtribuidos`;
-        const response = await fetch(url, { method: 'POST' });
-        const json = await response.json();
-        if (json.status === 'ok') {
-          // Os dados da planilha vêm no formato array de arrays (data)
-          // Precisamos converter para o formato leads esperado
-          // Como seu GAS retorna array com objetos {id, row, data}
-          // data = linha da planilha. Mapeie para os campos do lead
-          const leadsFormatados = json.leads.map(item => {
-            // Seu GAS retorna toda linha como item.data, mas não sabemos os headers
-            // Para garantir sincronia, vamos definir os campos principais aqui:
-            // Você pode ajustar os índices conforme o seu layout da planilha
-            // Suponha:
-            // id = item.data[0]
-            // name = item.data[1]
-            // vehicleModel = item.data[2]
-            // vehicleYearModel = item.data[3]
-            // city = item.data[4]
-            // phone = item.data[5]
-            // insuranceType = item.data[6]
-            // status = item.data[7]
-            // confirmado = item.data[8] (boolean)
-            // insurer = item.data[9]
-            // insurerConfirmed = item.data[10] (boolean)
-            // usuarioId = item.data[11] (int)
-            // premioLiquido = item.data[12]
-            // comissao = item.data[13]
-            // parcelamento = item.data[14]
-            // createdAt = item.data[15]
-            return {
-              id: item.data[0],
-              name: item.data[1],
-              vehicleModel: item.data[2],
-              vehicleYearModel: item.data[3],
-              city: item.data[4],
-              phone: item.data[5],
-              insuranceType: item.data[6],
-              status: item.data[7] || 'Selecione o status',
-              confirmado: item.data[8] === 'true' || item.data[8] === true,
-              insurer: item.data[9] || '',
-              insurerConfirmed: item.data[10] === 'true' || item.data[10] === true,
-              usuarioId: item.data[11] ? Number(item.data[11]) : null,
-              premioLiquido: item.data[12] || '',
-              comissao: item.data[13] || '',
-              parcelamento: item.data[14] || '',
-              createdAt: item.data[15] || '',
-            };
-          });
-          setLeads(leadsFormatados);
-        } else {
-          console.error('Erro ao buscar leads do GAS:', json.mensagem);
-        }
-      } catch (error) {
-        console.error('Erro na requisição para GAS:', error);
-      }
-    };
-
-    fetchLeadsNaoAtribuidos();
-  }, []);
-
-  // Função para enviar dados para Google Sheets via Google Apps Script
-  const enviarParaGoogleSheets = async (lead) => {
-    if (!GOOGLE_SHEETS_SCRIPT_URL) {
-      console.error('URL do Google Apps Script não configurada.');
-      return;
-    }
-
-    try {
-      const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: lead.id,
-          name: lead.name,
-          vehicleModel: lead.vehicleModel,
-          vehicleYearModel: lead.vehicleYearModel,
-          city: lead.city,
-          phone: lead.phone,
-          insuranceType: lead.insuranceType,
-          status: lead.status,
-          confirmado: lead.confirmado,
-          insurer: lead.insurer,
-          insurerConfirmed: lead.insurerConfirmed,
-          usuarioId: lead.usuarioId,
-          premioLiquido: lead.premioLiquido,
-          comissao: lead.comissao,
-          parcelamento: lead.parcelamento,
-          createdAt: lead.createdAt,
-        }),
-      });
-
-      if (response.ok) {
-        console.log('Lead enviada para Google Sheets com sucesso!');
-      } else {
-        console.error('Erro ao enviar lead para Google Sheets:', response.statusText);
-      }
-    } catch (error) {
-      console.error('Erro ao enviar lead para Google Sheets:', error);
-    }
-  };
 
   const adicionarUsuario = (usuario) => {
     setUsuarios((prev) => [...prev, { ...usuario, id: prev.length + 1 }]);
@@ -160,11 +132,6 @@ const App = () => {
 
     if (novoStatus === 'Fechado') {
       setUltimoFechadoId(id);
-      // Enviar lead fechada para Google Sheets
-      const leadFechado = leads.find((lead) => lead.id === id);
-      if (leadFechado) {
-        enviarParaGoogleSheets({ ...leadFechado, status: novoStatus, confirmado: true });
-      }
     }
   };
 
@@ -292,16 +259,11 @@ const App = () => {
             path="/leads"
             element={
               <Leads
-                leads={leads}
-                usuarioLogado={usuarioLogado}
-                atualizarStatusLead={atualizarStatusLead}
-                onAbrirLead={onAbrirLead}
-                leadSelecionado={leadSelecionado}
-                setLeadSelecionado={setLeadSelecionado}
-                atualizarSeguradoraLead={atualizarSeguradoraLead}
-                confirmarSeguradoraLead={confirmarSeguradoraLead}
-                atualizarDetalhesLeadFechado={atualizarDetalhesLeadFechado}
+                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
+                usuarios={usuarios}
+                onUpdateStatus={atualizarStatusLead}
                 transferirLead={transferirLead}
+                usuarioLogado={usuarioLogado}
               />
             }
           />
@@ -309,11 +271,14 @@ const App = () => {
             path="/leads-fechados"
             element={
               <LeadsFechados
-                leads={leads.filter((l) => l.status === 'Fechado')}
-                usuarioLogado={usuarioLogado}
+                leads={leads}
+                usuarios={usuarios}
+                onUpdateInsurer={atualizarSeguradoraLead}
+                onConfirmInsurer={confirmarSeguradoraLead}
+                onUpdateDetalhes={atualizarDetalhesLeadFechado}
+                ultimoFechadoId={ultimoFechadoId}
                 onAbrirLead={onAbrirLead}
                 leadSelecionado={leadSelecionado}
-                setLeadSelecionado={setLeadSelecionado}
               />
             }
           />
@@ -321,11 +286,10 @@ const App = () => {
             path="/leads-perdidos"
             element={
               <LeadsPerdidos
-                leads={leads.filter((l) => l.status === 'Perdido')}
-                usuarioLogado={usuarioLogado}
+                leads={leads}
+                usuarios={usuarios}
                 onAbrirLead={onAbrirLead}
                 leadSelecionado={leadSelecionado}
-                setLeadSelecionado={setLeadSelecionado}
               />
             }
           />
@@ -342,10 +306,10 @@ const App = () => {
                   />
                 }
               />
-              <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
             </>
           )}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
+          <Route path="*" element={<h1 style={{ padding: 20 }}>Página não encontrada</h1>} />
         </Routes>
       </main>
     </div>
