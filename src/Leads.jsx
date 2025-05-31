@@ -1,383 +1,157 @@
-import React, { useState } from 'react';
-import Lead from './components/Lead';
+import React, { useState, useEffect } from 'react';
 
-const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
+const statusOptions = [
+  'Selecione o status',
+  'Fechado',
+  'Perdido',
+  'Em contato',
+  'Sem contato',
+  '',
+];
 
-const Leads = ({ leads, usuarios, onUpdateStatus, transferirLead, usuarioLogado }) => {
-  const [selecionados, setSelecionados] = useState({}); // { [leadId]: userId }
-  const [paginaAtual, setPaginaAtual] = useState(1);
+const Leads = ({
+  leads,
+  usuarios,
+  onUpdateStatus,
+  transferirLead,
+  usuarioLogado,
+  leadsNaoAtribuidos,
+  onAbrirLead,
+}) => {
+  const [statusFilter, setStatusFilter] = useState('');
+  const [seguradoraFilter, setSeguradoraFilter] = useState('');
+  const [filteredLeads, setFilteredLeads] = useState([]);
 
-  // Estados para filtro por data
-  const [dataInput, setDataInput] = useState('');
-  const [filtroData, setFiltroData] = useState('');
+  useEffect(() => {
+    let filtrados = leads;
 
-  // Estados para filtro por nome
-  const [nomeInput, setNomeInput] = useState('');
-  const [filtroNome, setFiltroNome] = useState('');
-
-  // Buscar leads atualizados do Google Sheets
-  const buscarLeadsAtualizados = async () => {
-    try {
-      const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL);
-      if (response.ok) {
-        const dadosLeads = await response.json();
-        setLeadsState(dadosLeads);
-      } else {
-        console.error('Erro ao buscar leads:', response.statusText);
-      }
-    } catch (error) {
-      console.error('Erro ao buscar leads:', error);
-    }
-  };
-
-  const leadsPorPagina = 10;
-
-  // Função para normalizar strings (remover acento, pontuação, espaços, etc)
-  const normalizarTexto = (texto = '') => {
-    return texto
-      .toLowerCase()
-      .normalize('NFD') // separa os acentos
-      .replace(/[\u0300-\u036f]/g, '') // remove acentos
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()@\+\?><\[\]\+]/g, '') // remove pontuação
-      .replace(/\s+/g, ' ') // substitui múltiplos espaços por um espaço
-      .trim();
-  };
-
-  const aplicarFiltroData = () => {
-    setFiltroData(dataInput);
-    setFiltroNome('');
-    setNomeInput('');
-    setPaginaAtual(1);
-  };
-
-  const aplicarFiltroNome = () => {
-    const filtroLimpo = nomeInput.trim();
-    setFiltroNome(filtroLimpo);
-    setFiltroData('');
-    setDataInput('');
-    setPaginaAtual(1);
-  };
-
-  const isSameDate = (leadDateStr, filtroStr) => {
-    if (!filtroStr) return true;
-    const leadDate = leadDateStr?.slice(0, 10);
-    const filtroDate = filtroStr;
-    return leadDate === filtroDate;
-  };
-
-  const nomeContemFiltro = (leadNome, filtroNome) => {
-    if (!filtroNome) return true;
-    if (!leadNome) return false;
-
-    const nomeNormalizado = normalizarTexto(leadNome);
-    const filtroNormalizado = normalizarTexto(filtroNome);
-
-    return nomeNormalizado.includes(filtroNormalizado);
-  };
-
-  // Filtragem dos leads pendentes + filtro data ou nome
-  const gerais = leads.filter((lead) => {
-    if (lead.status === 'Fechado' || lead.status === 'Perdido') return false;
-
-    if (filtroData) {
-      return isSameDate(lead.createdAt, filtroData);
+    if (statusFilter && statusFilter !== '') {
+      filtrados = filtrados.filter((lead) => (lead.status || '') === statusFilter);
     }
 
-    if (filtroNome) {
-      // Usando lead.name aqui
-      return nomeContemFiltro(lead.name, filtroNome);
+    if (seguradoraFilter && seguradoraFilter !== '') {
+      filtrados = filtrados.filter((lead) =>
+        lead.insurer ? lead.insurer.toLowerCase().includes(seguradoraFilter.toLowerCase()) : false
+      );
     }
 
-    return true;
-  });
+    setFilteredLeads(filtrados);
+  }, [leads, statusFilter, seguradoraFilter]);
 
-  const totalPaginas = Math.max(1, Math.ceil(gerais.length / leadsPorPagina));
-  const paginaCorrigida = Math.min(paginaAtual, totalPaginas);
+  // Checa se lead está na lista de leads não atribuídos (por id ou telefone)
+  const isLeadNaoAtribuido = (lead) => {
+    if (!leadsNaoAtribuidos || leadsNaoAtribuidos.length === 0) return false;
 
-  const usuariosAtivos = usuarios.filter((u) => u.status === 'Ativo');
-  const isAdmin = usuarioLogado?.id === 1;
-
-  const handleSelect = (leadId, userId) => {
-    setSelecionados((prev) => ({
-      ...prev,
-      [leadId]: Number(userId),
-    }));
-  };
-
-  const handleEnviar = (leadId) => {
-    const userId = selecionados[leadId];
-    if (!userId) {
-      alert('Selecione um usuário antes de enviar.');
-      return;
-    }
-    transferirLead(leadId, userId);
-  };
-
-  const handleAlterar = (leadId) => {
-    setSelecionados((prev) => ({
-      ...prev,
-      [leadId]: '',
-    }));
-    transferirLead(leadId, null);
-  };
-
-  const inicio = (paginaCorrigida - 1) * leadsPorPagina;
-  const fim = inicio + leadsPorPagina;
-  const leadsPagina = gerais.slice(inicio, fim);
-
-  const handlePaginaAnterior = () => {
-    setPaginaAtual((prev) => Math.max(prev - 1, 1));
-  };
-
-  const handlePaginaProxima = () => {
-    setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas));
-  };
-
-  const formatarData = (dataStr) => {
-    if (!dataStr) return '';
-    const data = new Date(dataStr);
-    return data.toLocaleDateString('pt-BR');
+    return leadsNaoAtribuidos.some((na) =>
+      na.id === lead.id || na.phone === lead.phone
+    );
   };
 
   return (
-    <div style={{ padding: '20px' }}>
-      {/* Linha de filtros */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '15px',
-          gap: '10px',
-          flexWrap: 'wrap',
-        }}
-      >
-        <h1 style={{ margin: 0 }}>Leads</h1>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Leads</h1>
 
-        {/* Filtro nome - centralizado */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            flexGrow: 1,
-            justifyContent: 'center',
-            minWidth: '300px',
-          }}
+      <div className="flex flex-wrap gap-4 mb-4">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="border px-3 py-1 rounded"
         >
-          <button
-            onClick={aplicarFiltroNome}
-            style={{
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '6px 14px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Filtrar
-          </button>
-          <input
-            type="text"
-            placeholder="Filtrar por nome"
-            value={nomeInput}
-            onChange={(e) => setNomeInput(e.target.value)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              width: '220px',
-              maxWidth: '100%',
-            }}
-            title="Filtrar leads pelo nome (contém)"
-          />
-        </div>
+          <option value="">Todos os Status</option>
+          {statusOptions.filter(Boolean).map((status) => (
+            <option key={status} value={status}>
+              {status === '' ? 'Sem status' : status}
+            </option>
+          ))}
+        </select>
 
-        {/* Filtro data - direita */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            minWidth: '220px',
-          }}
-        >
-          <button
-            onClick={aplicarFiltroData}
-            style={{
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '6px 14px',
-              cursor: 'pointer',
-            }}
-          >
-            Filtrar
-          </button>
-          <input
-            type="date"
-            value={dataInput}
-            onChange={(e) => setDataInput(e.target.value)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              cursor: 'pointer',
-            }}
-            title="Filtrar leads pela data exata de criação"
-          />
-        </div>
+        <input
+          type="text"
+          placeholder="Filtrar por seguradora"
+          value={seguradoraFilter}
+          onChange={(e) => setSeguradoraFilter(e.target.value)}
+          className="border px-3 py-1 rounded"
+        />
       </div>
 
-      {gerais.length === 0 ? (
-        <p>Não há leads pendentes.</p>
-      ) : (
-        <>
-          {leadsPagina.map((lead) => {
-            const responsavel = usuarios.find((u) => u.id === lead.usuarioId);
+      <div className="overflow-auto max-h-[70vh]">
+        {filteredLeads.length === 0 && (
+          <p className="text-gray-500">Nenhum lead encontrado para os filtros selecionados.</p>
+        )}
+
+        <ul className="space-y-3">
+          {filteredLeads.map((lead) => {
+            const isNaoAtribuido = isLeadNaoAtribuido(lead);
 
             return (
-              <div
+              <li
                 key={lead.id}
-                style={{
-                  border: '1px solid #ccc',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  marginBottom: '15px',
-                  position: 'relative',
-                }}
+                className={`border rounded p-3 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between
+                ${
+                  isNaoAtribuido
+                    ? 'bg-yellow-100 border-yellow-400'
+                    : 'bg-white hover:bg-gray-50'
+                }`}
               >
-                <Lead
-                  lead={lead}
-                  onUpdateStatus={onUpdateStatus}
-                  disabledConfirm={!lead.usuarioId}
-                />
+                <div className="flex-1">
+                  <p className="font-semibold">{lead.name || '—'}</p>
+                  <p className="text-sm text-gray-600">
+                    {lead.phone || 'Sem telefone'} - {lead.vehicleModel || 'Modelo?'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Status: <span className="font-medium">{lead.status || 'Sem status'}</span>
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Seguradora: <span className="font-medium">{lead.insurer || '-'}</span>
+                  </p>
+                </div>
 
-                {lead.usuarioId && responsavel ? (
-                  <div style={{ marginTop: '10px' }}>
-                    <p style={{ color: '#28a745' }}>
-                      Transferido para <strong>{responsavel.nome}</strong>
-                    </p>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleAlterar(lead.id)}
-                        style={{
-                          marginTop: '5px',
-                          padding: '5px 12px',
-                          backgroundColor: '#ffc107',
-                          color: '#000',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Alterar
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      marginTop: '10px',
-                      display: 'flex',
-                      gap: '10px',
-                      alignItems: 'center',
-                    }}
+                <div className="flex flex-col space-y-2 md:space-y-0 md:flex-row md:items-center md:gap-3 mt-3 md:mt-0">
+                  <select
+                    value={lead.status || ''}
+                    onChange={(e) => onUpdateStatus(lead.id, e.target.value)}
+                    className="border rounded px-2 py-1"
+                    title="Alterar status do lead"
                   >
-                    <select
-                      value={selecionados[lead.id] || ''}
-                      onChange={(e) => handleSelect(lead.id, e.target.value)}
-                      style={{
-                        padding: '5px',
-                        borderRadius: '4px',
-                        border: '1px solid #ccc',
-                      }}
-                    >
-                      <option value="">Selecione usuário ativo</option>
-                      {usuariosAtivos.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.nome}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleEnviar(lead.id)}
-                      style={{
-                        padding: '5px 12px',
-                        backgroundColor: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Enviar
-                    </button>
-                  </div>
-                )}
+                    {statusOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt === '' ? 'Sem status' : opt}
+                      </option>
+                    ))}
+                  </select>
 
-                {/* Data no canto inferior direito */}
-                <div
-  style={{
-    position: 'absolute',
-    bottom: '10px',
-    right: '15px',
-    fontSize: '12px',
-    color: '#888',
-    fontStyle: 'italic',  // <- itálico aqui
-  }}
-  title={`Criado em: ${formatarData(lead.createdAt)}`}
->
-  {formatarData(lead.createdAt)}
-</div>
-              </div>
+                  <select
+                    value={lead.usuarioId || ''}
+                    onChange={(e) => {
+                      const novoUsuarioId = Number(e.target.value);
+                      if (novoUsuarioId !== lead.usuarioId) {
+                        transferirLead(lead.id, novoUsuarioId);
+                      }
+                    }}
+                    className="border rounded px-2 py-1"
+                    title="Transferir lead para usuário"
+                  >
+                    <option value="">Sem responsável</option>
+                    {usuarios.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.nome}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={() => onAbrirLead(lead)}
+                    className="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition"
+                    title="Abrir lead"
+                  >
+                    Abrir
+                  </button>
+                </div>
+              </li>
             );
           })}
-
-          {/* Paginação */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '15px',
-              marginTop: '20px',
-            }}
-          >
-            <button
-              onClick={handlePaginaAnterior}
-              disabled={paginaCorrigida <= 1}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: '1px solid #ccc',
-                cursor: paginaCorrigida <= 1 ? 'not-allowed' : 'pointer',
-                backgroundColor: paginaCorrigida <= 1 ? '#f0f0f0' : '#fff',
-              }}
-            >
-              Anterior
-            </button>
-            <span style={{ alignSelf: 'center' }}>
-              Página {paginaCorrigida} de {totalPaginas}
-            </span>
-            <button
-              onClick={handlePaginaProxima}
-              disabled={paginaCorrigida >= totalPaginas}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: '1px solid #ccc',
-                cursor: paginaCorrigida >= totalPaginas ? 'not-allowed' : 'pointer',
-                backgroundColor: paginaCorrigida >= totalPaginas ? '#f0f0f0' : '#fff',
-              }}
-            >
-              Próxima
-            </button>
-          </div>
-        </>
-      )}
+        </ul>
+      </div>
     </div>
   );
 };
