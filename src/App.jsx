@@ -25,6 +25,9 @@ const App = () => {
   const [leads, setLeads] = useState([]);
   const [leadSelecionado, setLeadSelecionado] = useState(null); // movido para cá para usar no useEffect
 
+  // NOVO ESTADO para leads não atribuídos (busca via endpoint atualizado)
+  const [leadsNaoAtribuidos, setLeadsNaoAtribuidos] = useState([]);
+
   useEffect(() => {
     const fetchLeadsFromSheet = async () => {
       try {
@@ -68,10 +71,30 @@ const App = () => {
       }
     };
 
+    // FUNÇÃO NOVA para buscar leads não atribuídos via endpoint Google Apps Script
+    const fetchLeadsNaoAtribuidos = async () => {
+      try {
+        const url = GOOGLE_SHEETS_SCRIPT_URL + '?acao=listarLeadsNaoAtribuidos';
+        const response = await fetch(url, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.status === 'ok') {
+          setLeadsNaoAtribuidos(data.leads || []);
+        } else {
+          setLeadsNaoAtribuidos([]);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar leads não atribuídos:', error);
+        setLeadsNaoAtribuidos([]);
+      }
+    };
+
     fetchLeadsFromSheet();
+    fetchLeadsNaoAtribuidos();
 
     const interval = setInterval(() => {
       fetchLeadsFromSheet();
+      fetchLeadsNaoAtribuidos();
     }, 5000);
 
     return () => clearInterval(interval);
@@ -264,6 +287,7 @@ const App = () => {
                 onUpdateStatus={atualizarStatusLead}
                 transferirLead={transferirLead}
                 usuarioLogado={usuarioLogado}
+                leadsNaoAtribuidos={leadsNaoAtribuidos} // se quiser usar na aba leads
               />
             }
           />
