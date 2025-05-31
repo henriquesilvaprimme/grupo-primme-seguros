@@ -1,15 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
   const [status, setStatus] = useState(lead.status || '');
 
-  // Bloqueia edição se status for Fechado ou Perdido (não editável)
+  // Bloqueia apenas quando o status for Fechado ou Perdido
   const isBlocked = lead.status === 'Fechado' || lead.status === 'Perdido';
-
-  // Atualiza o status interno se o prop mudar (sincronização)
-  useEffect(() => {
-    setStatus(lead.status || '');
-  }, [lead.status]);
 
   // Define a cor do card conforme o status
   const cardColor = (() => {
@@ -22,14 +17,15 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
         return '#fff3cd'; // laranja claro
       case 'Sem Contato':
         return '#e2e3e5'; // cinza claro
+      case 'Selecione o status':
       case '':
       default:
-        return '#ffffff'; // branco para status vazio
+        return '#ffffff'; // branco para status vazio ou "Selecione o status"
     }
   })();
 
   const handleConfirm = () => {
-    if (!status || status === '') {
+    if (!status || status === 'Selecione o status') {
       alert('Selecione um status antes de confirmar!');
       return;
     }
@@ -45,7 +41,7 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
         borderRadius: '5px',
         backgroundColor: cardColor
       }}
-    >
+    >      
       <p><strong>Nome:</strong> {lead.name}</p>
       <p><strong>Modelo do veículo:</strong> {lead.vehicleModel}</p>
       <p><strong>Ano/Modelo:</strong> {lead.vehicleYearModel}</p>
@@ -55,7 +51,7 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
 
       <select
         value={status}
-        onChange={e => setStatus(e.target.value)}
+        onChange={(e) => setStatus(e.target.value)}
         disabled={isBlocked}
         style={{
           marginRight: '10px',
@@ -75,14 +71,14 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
       {!isBlocked ? (
         <button
           onClick={handleConfirm}
-          disabled={disabledConfirm || !status}
+          disabled={disabledConfirm || !status || status === 'Selecione o status'}
           style={{
             padding: '8px 16px',
-            backgroundColor: disabledConfirm || !status ? '#aaa' : '#007bff',
+            backgroundColor: disabledConfirm || !status || status === 'Selecione o status' ? '#aaa' : '#007bff',
             color: '#fff',
             border: 'none',
             borderRadius: '4px',
-            cursor: disabledConfirm || !status ? 'not-allowed' : 'pointer'
+            cursor: disabledConfirm || !status || status === 'Selecione o status' ? 'not-allowed' : 'pointer'
           }}
         >
           Confirmar
