@@ -1,228 +1,110 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
-// Função para buscar leads não atribuídos no GAS
-async function buscarLeadsNaoAtribuidos() {
-  const url = 'https://script.google.com/macros/s/AKfycbwbvFNnBu6yK6ZPc94QvPsi9aRxms2mmq45UQ2zbgRZb1YTPdfFcnGoAAc2Nq-mVabr/exec';
+const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
 
-  try {
-    const response = await fetch(url, { method: 'POST' });
-    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-
-    const data = await response.json();
-    if (data.status !== 'ok') throw new Error(data.mensagem || 'Erro desconhecido');
-
-    return data.leads; // Array de leads vindos do GAS
-  } catch (error) {
-    console.error('Erro ao buscar leads:', error);
-    throw error;
-  }
-}
-
-const Leads = ({ usuarios }) => {
-  const [leads, setLeads] = useState([]); // leads do GAS
-  const [loading, setLoading] = useState(true);
+const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usuarioLogado }) => {
+  const [leads, setLeads] = useState(leadsProp || []);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Filtros como seus exemplos anteriores
-  const [nomeInput, setNomeInput] = useState('');
-  const [dataInput, setDataInput] = useState('');
-  const [filtroNome, setFiltroNome] = useState('');
-  const [filtroData, setFiltroData] = useState('');
+  // Função para carregar leads do Google Sheets via Google Apps Script
+  const fetchLeads = async () => {
+    setLoading(true);
+    setError(null);
 
-  useEffect(() => {
-    async function carregarLeads() {
-      setLoading(true);
-      setError(null);
-      try {
-        const todosLeads = await buscarLeadsNaoAtribuidos();
-        // Aqui filtramos os leads com status "Em contato" ou "Sem contato"
-        const ativos = todosLeads.filter(lead => {
-          const status = lead.status?.toLowerCase();
-          return status === 'em contato' || status === 'sem contato' || status === '';
-        });
-        setLeads(ativos);
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
+    try {
+      const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL);
+      const data = await response.json();
+
+      // Tratar resposta: se for array direto, usar; se for objeto com contents, usar contents
+      const fetchedLeads = Array.isArray(data) ? data : data.contents;
+
+      if (!fetchedLeads) {
+        throw new Error('Resposta inválida: leads não encontrados');
       }
+
+      // Atualiza o estado local com os leads buscados
+      setLeads(fetchedLeads);
+    } catch (err) {
+      setError('Erro ao carregar leads: ' + err.message);
+      console.error('Erro ao carregar leads:', err);
+    } finally {
+      setLoading(false);
     }
-    carregarLeads();
+  };
+
+  // Carregar leads na montagem do componente
+  useEffect(() => {
+    fetchLeads();
   }, []);
 
-  // Função para normalizar texto (remover acentos etc)
-  const normalizarTexto = (texto) => {
-    return texto
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[.,]/g, '')
-      .trim();
-  };
+  // Se o leadsProp mudar, atualiza local (sincronização básica)
+  useEffect(() => {
+    setLeads(leadsProp);
+  }, [leadsProp]);
 
-  const aplicarFiltroNome = () => {
-    setFiltroNome(nomeInput.trim());
-  };
+  // Função para alterar status de um lead localmente e também avisar a função passada por props
+  const handleStatusChange = (id, novoStatus) => {
+    onUpdateStatus(id, novoStatus);
 
-  const aplicarFiltroData = () => {
-    setFiltroData(dataInput);
+    setLeads((prev) =>
+      prev.map((lead) => (lead.id === id ? { ...lead, status: novoStatus } : lead))
+    );
   };
-
-  const leadsFiltrados = leads.filter((lead) => {
-    if (filtroNome) {
-      const nomeNormalizado = normalizarTexto(lead.name);
-      const filtroNormalizado = normalizarTexto(filtroNome);
-      if (!nomeNormalizado.includes(filtroNormalizado)) {
-        return false;
-      }
-    }
-    if (filtroData) {
-      if (!lead.createdAt || !lead.createdAt.startsWith(filtroData)) {
-        return false;
-      }
-    }
-    return true;
-  });
 
   if (loading) return <p>Carregando leads...</p>;
-  if (error) return <p>Erro ao carregar leads: {error}</p>;
+  if (error) return <p className="text-red-500">{error}</p>;
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Leads</h1>
+    <div className="p-4">
+      <h2 className="text-2xl font-semibold mb-4">Leads</h2>
+      {leads.length === 0 && <p>Nenhum lead encontrado.</p>}
 
-      {/* Container filtros: nome centralizado, data canto direito */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          flexWrap: 'wrap',
-          gap: '10px',
-        }}
-      >
-        {/* Filtro nome: centralizado */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            flex: '1',
-            justifyContent: 'center',
-            minWidth: '280px',
-          }}
-        >
-          <button
-            onClick={aplicarFiltroNome}
-            style={{
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '6px 14px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              marginRight: '8px',
-            }}
+      <div className="space-y-4">
+        {leads.map((lead) => (
+          <div
+            key={lead.id}
+            className="border rounded p-4 shadow hover:shadow-lg transition cursor-pointer"
           >
-            Filtrar
-          </button>
-          <input
-            type="text"
-            placeholder="Filtrar por nome"
-            value={nomeInput}
-            onChange={(e) => setNomeInput(e.target.value)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              width: '220px',
-              maxWidth: '100%',
-            }}
-            title="Filtrar leads pelo nome (contém)"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') aplicarFiltroNome();
-            }}
-          />
-        </div>
+            <h3 className="text-lg font-bold">{lead.name}</h3>
+            <p>Veículo: {lead.vehicleModel} - {lead.vehicleYearModel}</p>
+            <p>Cidade: {lead.city}</p>
+            <p>Telefone: {lead.phone}</p>
+            <p>Tipo Seguro: {lead.insuranceType}</p>
+            <p>Status: {lead.status || 'Selecione o status'}</p>
 
-        {/* Filtro data: canto direito */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            minWidth: '230px',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <button
-            onClick={aplicarFiltroData}
-            style={{
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '6px 14px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              marginRight: '8px',
-            }}
-          >
-            Filtrar
-          </button>
-          <input
-            type="date"
-            value={dataInput}
-            onChange={(e) => setDataInput(e.target.value)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              cursor: 'pointer',
-              minWidth: '140px',
-            }}
-            title="Filtrar leads pela data exata de criação"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') aplicarFiltroData();
-            }}
-          />
-        </div>
-      </div>
+            <select
+              value={lead.status || ''}
+              onChange={(e) => handleStatusChange(lead.id, e.target.value)}
+              className="mt-2 p-1 border rounded"
+            >
+              <option value="">Selecione o status</option>
+              <option value="Em contato">Em contato</option>
+              <option value="Sem contato">Sem contato</option>
+              <option value="Fechado">Fechado</option>
+              <option value="Perdido">Perdido</option>
+            </select>
 
-      {leadsFiltrados.length === 0 ? (
-        <p>Não há leads que correspondam ao filtro aplicado.</p>
-      ) : (
-        leadsFiltrados.map(lead => {
-          const containerStyle = {
-            border: '2px solid #2196F3',
-            backgroundColor: '#e3f2fd',
-            padding: '15px',
-            marginBottom: '15px',
-            borderRadius: '5px'
-          };
-
-          const responsavel = usuarios.find(u => u.id === lead.usuarioId);
-
-          return (
-            <div key={lead.id} style={containerStyle}>
-              <h3>{lead.name}</h3>
-              <p><strong>Modelo:</strong> {lead.vehicleModel}</p>
-              <p><strong>Ano/Modelo:</strong> {lead.vehicleYearModel}</p>
-              <p><strong>Cidade:</strong> {lead.city}</p>
-              <p><strong>Telefone:</strong> {lead.phone}</p>
-              <p><strong>Tipo de Seguro:</strong> {lead.insuranceType}</p>
-
-              {responsavel && (
-                <p style={{ marginTop: '10px', color: '#007bff' }}>
-                  Transferido para <strong>{responsavel.nome}</strong>
-                </p>
-              )}
+            {/* Exemplo simples de transferência para usuário (se desejar, pode expandir) */}
+            <div className="mt-2">
+              <label htmlFor={`usuario-transferir-${lead.id}`} className="mr-2">Transferir para:</label>
+              <select
+                id={`usuario-transferir-${lead.id}`}
+                value={lead.usuarioId || ''}
+                onChange={(e) => transferirLead(lead.id, Number(e.target.value))}
+                className="p-1 border rounded"
+              >
+                <option value="">Nenhum</option>
+                {usuarios.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome} ({u.usuario})
+                  </option>
+                ))}
+              </select>
             </div>
-          );
-        })
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
