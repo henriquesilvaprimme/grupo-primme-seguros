@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
 
 const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usuarioLogado }) => {
-  const [leads, setLeads] = useState(leadsProp || []);
+  const [leads, setLeads] = useState([]);  // Começa vazio, vai buscar
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -13,9 +13,17 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
 
     try {
       const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
 
-      const fetchedLeads = Array.isArray(data) ? data : (data && data.contents ? data.contents : []);
+      // Dados podem vir diretamente como array ou dentro de data.contents
+      const fetchedLeads = Array.isArray(data)
+        ? data
+        : data && data.contents
+        ? data.contents
+        : [];
 
       if (!fetchedLeads || fetchedLeads.length === 0) {
         console.warn('Nenhum lead encontrado na resposta.');
@@ -34,9 +42,8 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
     fetchLeads();
   }, []);
 
-  useEffect(() => {
-    setLeads(leadsProp);
-  }, [leadsProp]);
+  // Não sobrescrever leads buscados com props que podem estar vazias
+  // Se quiser usar leadsProp, avalie a lógica para não sobrescrever fetch
 
   const handleStatusChange = (id, novoStatus) => {
     onUpdateStatus(id, novoStatus);
@@ -56,11 +63,13 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
       <div className="space-y-4">
         {leads.map((lead) => (
           <div
-            key={lead.id}
+            key={lead.id || lead.phone || Math.random()}
             className="border rounded p-4 shadow hover:shadow-lg transition cursor-pointer"
           >
             <h3 className="text-lg font-bold">{lead.name}</h3>
-            <p>Veículo: {lead.vehicleModel} - {lead.vehicleYearModel}</p>
+            <p>
+              Veículo: {lead.vehicleModel} - {lead.vehicleYearModel}
+            </p>
             <p>Cidade: {lead.city}</p>
             <p>Telefone: {lead.phone}</p>
             <p>Tipo Seguro: {lead.insuranceType}</p>
@@ -79,7 +88,9 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
             </select>
 
             <div className="mt-2">
-              <label htmlFor={`usuario-transferir-${lead.id}`} className="mr-2">Transferir para:</label>
+              <label htmlFor={`usuario-transferir-${lead.id}`} className="mr-2">
+                Transferir para:
+              </label>
               <select
                 id={`usuario-transferir-${lead.id}`}
                 value={lead.usuarioId || ''}
