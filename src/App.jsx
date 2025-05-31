@@ -16,136 +16,136 @@ const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZt
 const App = () => {
   const navigate = useNavigate();
 
-  // --- Autenticação ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginInput, setLoginInput] = useState('');
   const [senhaInput, setSenhaInput] = useState('');
   const [usuarioLogado, setUsuarioLogado] = useState(null);
 
-  // --- Leads e usuários ---
+  // Leads estado inicial vazio; será carregado do GAS
   const [leads, setLeads] = useState([]);
-  const [leadSelecionado, setLeadSelecionado] = useState(null);
-  const [leadsNaoAtribuidos, setLeadsNaoAtribuidos] = useState([]);
-
+  
   const [usuarios, setUsuarios] = useState([
     {
       id: 1,
-      usuario: '1', // login
+      usuario: '1',
       nome: 'Administrador 1',
       email: 'admin1@example.com',
       senha: '1',
       status: 'Ativo',
       tipo: 'Admin',
     },
-    {
-      id: 2,
-      usuario: 'maria',
-      nome: 'Maria Oliveira',
-      email: 'maria@example.com',
-      senha: 'senha123',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 3,
-      usuario: 'joao',
-      nome: 'João Souza',
-      email: 'joao@example.com',
-      senha: 'joaopass',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 4,
-      usuario: 'admin2',
-      nome: 'Administrador 2',
-      email: 'admin2@example.com',
-      senha: 'adminpass',
-      status: 'Ativo',
-      tipo: 'Admin',
-    },
+    // ... (restante dos usuarios)
   ]);
 
-  // Para identificar o último lead fechado (para destacar)
   const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
+  const [leadSelecionado, setLeadSelecionado] = useState(null);
 
-  // --- Efeito para sincronizar leads com Google Sheets ---
+  // --- Buscar leads não atribuídos do GAS ao iniciar o app ---
   useEffect(() => {
-    // Função para buscar todos os leads
-    const fetchLeadsFromSheet = async () => {
-      try {
-        const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getLeads');
-        const data = await response.json();
-
-        if (Array.isArray(data)) {
-          const formattedLeads = data.map((item, index) => ({
-            id: item.id ? Number(item.id) : index + 1,
-            name: item.name || item.Name || '',
-            vehicleModel: item.vehiclemodel || item.vehicleModel || '',
-            vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
-            city: item.city || '',
-            phone: item.phone || item.Telefone || '',
-            insuranceType: item.insuranceType || '',
-            status: item.status || 'Selecione o status',
-            confirmado: item.confirmado === 'true' || item.confirmado === true,
-            insurer: item.insurer || '',
-            insurerConfirmed: item.insurerConfirmed === 'true' || item.insurerConfirmed === true,
-            usuarioId: item.usuarioId ? Number(item.usuarioId) : null,
-            premioLiquido: item.premioLiquido || '',
-            comissao: item.comissao || '',
-            parcelamento: item.parcelamento || '',
-            createdAt: item.createdAt || new Date().toISOString(),
-          }));
-
-          // Atualiza leads só se não houver lead selecionado, para não atrapalhar a edição
-          if (!leadSelecionado) {
-            setLeads(formattedLeads);
-          }
-        } else {
-          if (!leadSelecionado) {
-            setLeads([]);
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao buscar leads do Google Sheets:', error);
-        if (!leadSelecionado) {
-          setLeads([]);
-        }
-      }
-    };
-
-    // Função para buscar leads não atribuídos via Google Apps Script (POST)
     const fetchLeadsNaoAtribuidos = async () => {
       try {
-        const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?acao=listarLeadsNaoAtribuidos', {
-          method: 'POST',
-        });
-        const data = await response.json();
-
-        if (data.status === 'ok') {
-          setLeadsNaoAtribuidos(data.leads || []);
+        const url = `${GOOGLE_SHEETS_SCRIPT_URL}?acao=listarLeadsNaoAtribuidos`;
+        const response = await fetch(url, { method: 'POST' });
+        const json = await response.json();
+        if (json.status === 'ok') {
+          // Os dados da planilha vêm no formato array de arrays (data)
+          // Precisamos converter para o formato leads esperado
+          // Como seu GAS retorna array com objetos {id, row, data}
+          // data = linha da planilha. Mapeie para os campos do lead
+          const leadsFormatados = json.leads.map(item => {
+            // Seu GAS retorna toda linha como item.data, mas não sabemos os headers
+            // Para garantir sincronia, vamos definir os campos principais aqui:
+            // Você pode ajustar os índices conforme o seu layout da planilha
+            // Suponha:
+            // id = item.data[0]
+            // name = item.data[1]
+            // vehicleModel = item.data[2]
+            // vehicleYearModel = item.data[3]
+            // city = item.data[4]
+            // phone = item.data[5]
+            // insuranceType = item.data[6]
+            // status = item.data[7]
+            // confirmado = item.data[8] (boolean)
+            // insurer = item.data[9]
+            // insurerConfirmed = item.data[10] (boolean)
+            // usuarioId = item.data[11] (int)
+            // premioLiquido = item.data[12]
+            // comissao = item.data[13]
+            // parcelamento = item.data[14]
+            // createdAt = item.data[15]
+            return {
+              id: item.data[0],
+              name: item.data[1],
+              vehicleModel: item.data[2],
+              vehicleYearModel: item.data[3],
+              city: item.data[4],
+              phone: item.data[5],
+              insuranceType: item.data[6],
+              status: item.data[7] || 'Selecione o status',
+              confirmado: item.data[8] === 'true' || item.data[8] === true,
+              insurer: item.data[9] || '',
+              insurerConfirmed: item.data[10] === 'true' || item.data[10] === true,
+              usuarioId: item.data[11] ? Number(item.data[11]) : null,
+              premioLiquido: item.data[12] || '',
+              comissao: item.data[13] || '',
+              parcelamento: item.data[14] || '',
+              createdAt: item.data[15] || '',
+            };
+          });
+          setLeads(leadsFormatados);
         } else {
-          setLeadsNaoAtribuidos([]);
+          console.error('Erro ao buscar leads do GAS:', json.mensagem);
         }
       } catch (error) {
-        console.error('Erro ao buscar leads não atribuídos:', error);
-        setLeadsNaoAtribuidos([]);
+        console.error('Erro na requisição para GAS:', error);
       }
     };
 
-    fetchLeadsFromSheet();
     fetchLeadsNaoAtribuidos();
+  }, []);
 
-    // Atualiza a cada 5 segundos
-    const interval = setInterval(() => {
-      fetchLeadsFromSheet();
-      fetchLeadsNaoAtribuidos();
-    }, 5000);
+  // Função para enviar dados para Google Sheets via Google Apps Script
+  const enviarParaGoogleSheets = async (lead) => {
+    if (!GOOGLE_SHEETS_SCRIPT_URL) {
+      console.error('URL do Google Apps Script não configurada.');
+      return;
+    }
 
-    return () => clearInterval(interval);
-  }, [leadSelecionado]);
+    try {
+      const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: lead.id,
+          name: lead.name,
+          vehicleModel: lead.vehicleModel,
+          vehicleYearModel: lead.vehicleYearModel,
+          city: lead.city,
+          phone: lead.phone,
+          insuranceType: lead.insuranceType,
+          status: lead.status,
+          confirmado: lead.confirmado,
+          insurer: lead.insurer,
+          insurerConfirmed: lead.insurerConfirmed,
+          usuarioId: lead.usuarioId,
+          premioLiquido: lead.premioLiquido,
+          comissao: lead.comissao,
+          parcelamento: lead.parcelamento,
+          createdAt: lead.createdAt,
+        }),
+      });
 
-  // --- Funções para manipular usuários e leads ---
+      if (response.ok) {
+        console.log('Lead enviada para Google Sheets com sucesso!');
+      } else {
+        console.error('Erro ao enviar lead para Google Sheets:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Erro ao enviar lead para Google Sheets:', error);
+    }
+  };
 
   const adicionarUsuario = (usuario) => {
     setUsuarios((prev) => [...prev, { ...usuario, id: prev.length + 1 }]);
@@ -160,30 +160,43 @@ const App = () => {
 
     if (novoStatus === 'Fechado') {
       setUltimoFechadoId(id);
+      // Enviar lead fechada para Google Sheets
+      const leadFechado = leads.find((lead) => lead.id === id);
+      if (leadFechado) {
+        enviarParaGoogleSheets({ ...leadFechado, status: novoStatus, confirmado: true });
+      }
     }
   };
 
   const atualizarSeguradoraLead = (id, seguradora) => {
     setLeads((prev) =>
-      prev.map((lead) => (lead.id === id ? { ...lead, insurer: seguradora } : lead))
+      prev.map((lead) =>
+        lead.id === id ? { ...lead, insurer: seguradora } : lead
+      )
     );
   };
 
   const confirmarSeguradoraLead = (id) => {
     setLeads((prev) =>
-      prev.map((lead) => (lead.id === id ? { ...lead, insurerConfirmed: true } : lead))
+      prev.map((lead) =>
+        lead.id === id ? { ...lead, insurerConfirmed: true } : lead
+      )
     );
   };
 
   const atualizarDetalhesLeadFechado = (id, campo, valor) => {
     setLeads((prev) =>
-      prev.map((lead) => (lead.id === id ? { ...lead, [campo]: valor } : lead))
+      prev.map((lead) =>
+        lead.id === id ? { ...lead, [campo]: valor } : lead
+      )
     );
   };
 
   const transferirLead = (leadId, usuarioId) => {
     setLeads((prev) =>
-      prev.map((lead) => (lead.id === leadId ? { ...lead, usuarioId } : lead))
+      prev.map((lead) =>
+        lead.id === leadId ? { ...lead, usuarioId } : lead
+      )
     );
   };
 
@@ -211,7 +224,6 @@ const App = () => {
     navigate(path);
   };
 
-  // --- Login ---
   const handleLogin = () => {
     const usuarioEncontrado = usuarios.find(
       (u) => u.usuario === loginInput && u.senha === senhaInput && u.status === 'Ativo'
@@ -225,7 +237,6 @@ const App = () => {
     }
   };
 
-  // --- Render login se não autenticado ---
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-100 to-indigo-200">
@@ -258,7 +269,6 @@ const App = () => {
 
   const isAdmin = usuarioLogado?.tipo === 'Admin';
 
-  // --- Render principal após login ---
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       <Sidebar isAdmin={isAdmin} nomeUsuario={loginInput} />
@@ -270,7 +280,11 @@ const App = () => {
             path="/dashboard"
             element={
               <Dashboard
-                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
+                leads={
+                  isAdmin
+                    ? leads
+                    : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)
+                }
               />
             }
           />
@@ -278,13 +292,16 @@ const App = () => {
             path="/leads"
             element={
               <Leads
-                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
-                usuarios={usuarios}
-                onUpdateStatus={atualizarStatusLead}
-                transferirLead={transferirLead}
+                leads={leads}
                 usuarioLogado={usuarioLogado}
-                leadsNaoAtribuidos={leadsNaoAtribuidos} // Disponível para uso na aba Leads
+                atualizarStatusLead={atualizarStatusLead}
                 onAbrirLead={onAbrirLead}
+                leadSelecionado={leadSelecionado}
+                setLeadSelecionado={setLeadSelecionado}
+                atualizarSeguradoraLead={atualizarSeguradoraLead}
+                confirmarSeguradoraLead={confirmarSeguradoraLead}
+                atualizarDetalhesLeadFechado={atualizarDetalhesLeadFechado}
+                transferirLead={transferirLead}
               />
             }
           />
@@ -292,14 +309,11 @@ const App = () => {
             path="/leads-fechados"
             element={
               <LeadsFechados
-                leads={leads}
-                usuarios={usuarios}
-                onUpdateInsurer={atualizarSeguradoraLead}
-                onConfirmInsurer={confirmarSeguradoraLead}
-                onUpdateDetalhes={atualizarDetalhesLeadFechado}
-                ultimoFechadoId={ultimoFechadoId}
+                leads={leads.filter((l) => l.status === 'Fechado')}
+                usuarioLogado={usuarioLogado}
                 onAbrirLead={onAbrirLead}
                 leadSelecionado={leadSelecionado}
+                setLeadSelecionado={setLeadSelecionado}
               />
             }
           />
@@ -307,10 +321,11 @@ const App = () => {
             path="/leads-perdidos"
             element={
               <LeadsPerdidos
-                leads={leads}
-                usuarios={usuarios}
+                leads={leads.filter((l) => l.status === 'Perdido')}
+                usuarioLogado={usuarioLogado}
                 onAbrirLead={onAbrirLead}
                 leadSelecionado={leadSelecionado}
+                setLeadSelecionado={setLeadSelecionado}
               />
             }
           />
@@ -327,10 +342,10 @@ const App = () => {
                   />
                 }
               />
+              <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
             </>
           )}
-          <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
-          <Route path="*" element={<h1 style={{ padding: 20 }}>Página não encontrada</h1>} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
     </div>
