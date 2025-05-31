@@ -1,12 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-const LeadsPerdidos = ({ leads, usuarios }) => {
-  const perdidos = leads.filter(lead => lead.status === 'Perdido');
+// Função para buscar leads não atribuídos no GAS
+async function buscarLeadsNaoAtribuidos() {
+  const url = 'https://script.google.com/macros/s/SEU_DEPLOY_ID_AQUI/exec?acao=listarLeadsNaoAtribuidos';
 
+  try {
+    const response = await fetch(url, { method: 'POST' });
+    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+
+    const data = await response.json();
+    if (data.status !== 'ok') throw new Error(data.mensagem || 'Erro desconhecido');
+
+    return data.leads; // Array de leads vindos do GAS
+  } catch (error) {
+    console.error('Erro ao buscar leads:', error);
+    throw error;
+  }
+}
+
+const LeadsPerdidos = ({ usuarios }) => {
+  const [leads, setLeads] = useState([]); // estado que vai armazenar os leads do GAS
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Filtros e inputs do seu código original
   const [nomeInput, setNomeInput] = useState('');
   const [dataInput, setDataInput] = useState('');
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroData, setFiltroData] = useState('');
+
+  // Busca os leads do GAS quando o componente monta
+  useEffect(() => {
+    async function carregarLeads() {
+      setLoading(true);
+      setError(null);
+      try {
+        const todosLeads = await buscarLeadsNaoAtribuidos();
+        // Filtra somente os com status 'Perdido' (igual seu filtro original)
+        const perdidos = todosLeads.filter(lead => lead.status === 'Perdido');
+        setLeads(perdidos);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    carregarLeads();
+  }, []);
 
   // Função para normalizar texto (remover acentos e caracteres especiais)
   const normalizarTexto = (texto) => {
@@ -26,7 +66,8 @@ const LeadsPerdidos = ({ leads, usuarios }) => {
     setFiltroData(dataInput);
   };
 
-  const leadsFiltrados = perdidos.filter((lead) => {
+  // Aplicar filtros como no seu código original
+  const leadsFiltrados = leads.filter((lead) => {
     if (filtroNome) {
       const nomeNormalizado = normalizarTexto(lead.name);
       const filtroNormalizado = normalizarTexto(filtroNome);
@@ -41,6 +82,9 @@ const LeadsPerdidos = ({ leads, usuarios }) => {
     }
     return true;
   });
+
+  if (loading) return <p>Carregando leads perdidos...</p>;
+  if (error) return <p>Erro ao carregar leads: {error}</p>;
 
   return (
     <div style={{ padding: '20px' }}>
