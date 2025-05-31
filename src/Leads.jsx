@@ -1,363 +1,157 @@
-import React, { useState, useEffect } from 'react';
-import Lead from './components/Lead';
+import React, { useEffect, useState } from 'react';
+import Lead from './Lead'; // seu componente Lead já enviado anteriormente
 
-const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
+const ENDPOINT_GAS = 'https://script.google.com/macros/s/SEU_DEPLOY_ID/exec';
 
-const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usuarioLogado }) => {
-  const [leadsState, setLeadsState] = useState(leadsProp || []);
-  const [selecionados, setSelecionados] = useState({});
+const Leads = () => {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState(null);
+  const [usuario, setUsuario] = useState(''); // para atribuir lead
   const [paginaAtual, setPaginaAtual] = useState(1);
-  const [dataInput, setDataInput] = useState('');
-  const [filtroData, setFiltroData] = useState('');
-  const [nomeInput, setNomeInput] = useState('');
-  const [filtroNome, setFiltroNome] = useState('');
+  const itensPorPagina = 10;
+
+  // Buscar leads não atribuídos do GAS
+  const buscarLeadsNaoAtribuidos = async () => {
+    setLoading(true);
+    setErro(null);
+    try {
+      const res = await fetch(ENDPOINT_GAS, {
+        method: 'POST',
+        body: JSON.stringify({ acao: 'listarLeadsNaoAtribuidos' }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.status === 'ok') {
+        setLeads(json.leads.map(lead => ({
+          id: lead.id,
+          data: lead.data,
+          status: lead.data[/* índice da coluna status no GAS */] || '',
+          // Mapear os campos conforme sua estrutura da planilha
+          name: lead.data[/* índice do nome */],
+          vehicleModel: lead.data[/* índice modelo veículo */],
+          vehicleYearModel: lead.data[/* índice ano/modelo */],
+          city: lead.data[/* índice cidade */],
+          phone: lead.data[/* índice telefone */],
+          insuranceType: lead.data[/* índice tipo seguro */],
+          responsavel: lead.data[/* índice responsável */] || ''
+        })));
+      } else {
+        setErro(json.mensagem || 'Erro ao buscar leads');
+      }
+    } catch (error) {
+      setErro(error.message || 'Erro na comunicação');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const buscarLeadsAtualizados = async () => {
-      try {
-        const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL);
-        if (response.ok) {
-          const dadosLeads = await response.json();
-          const dados = Array.isArray(dadosLeads) ? dadosLeads : (dadosLeads?.contents || []);
-          setLeadsState(dados);
-        } else {
-          console.error('Erro ao buscar leads:', response.statusText);
-        }
-      } catch (error) {
-        console.error('Erro ao buscar leads:', error);
-      }
-    };
-
-    buscarLeadsAtualizados();
+    buscarLeadsNaoAtribuidos();
   }, []);
 
-  const leadsPorPagina = 10;
-
-  const normalizarTexto = (texto = '') => {
-    return texto
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()@\+\?><\[\]\+]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-
-  const aplicarFiltroData = () => {
-    setFiltroData(dataInput);
-    setFiltroNome('');
-    setNomeInput('');
-    setPaginaAtual(1);
-  };
-
-  const aplicarFiltroNome = () => {
-    const filtroLimpo = nomeInput.trim();
-    setFiltroNome(filtroLimpo);
-    setFiltroData('');
-    setDataInput('');
-    setPaginaAtual(1);
-  };
-
-  const isSameDate = (leadDateStr, filtroStr) => {
-    if (!filtroStr) return true;
-    const leadDate = leadDateStr?.slice(0, 10);
-    return leadDate === filtroStr;
-  };
-
-  const nomeContemFiltro = (leadNome, filtroNome) => {
-    if (!filtroNome) return true;
-    if (!leadNome) return false;
-
-    const nomeNormalizado = normalizarTexto(leadNome);
-    const filtroNormalizado = normalizarTexto(filtroNome);
-
-    return nomeNormalizado.includes(filtroNormalizado);
-  };
-
-  const gerais = leadsState.filter((lead) => {
-    if (lead.status === 'Fechado' || lead.status === 'Perdido') return false;
-
-    if (filtroData) {
-      return isSameDate(lead.createdAt, filtroData);
+  // Atribuir lead a um usuário
+  const atribuirLead = async (leadId, usuario) => {
+    try {
+      const res = await fetch(ENDPOINT_GAS, {
+        method: 'POST',
+        body: JSON.stringify({ acao: 'atribuirLead', leadId, usuario }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.status === 'ok') {
+        buscarLeadsNaoAtribuidos(); // atualizar lista
+      } else {
+        alert('Erro ao atribuir lead: ' + (json.mensagem || ''));
+      }
+    } catch (error) {
+      alert('Erro na comunicação: ' + error.message);
     }
+  };
 
-    if (filtroNome) {
-      return nomeContemFiltro(lead.name, filtroNome);
+  // Atualizar status do lead
+  const atualizarStatus = async (leadId, novoStatus) => {
+    try {
+      const res = await fetch(ENDPOINT_GAS, {
+        method: 'POST',
+        body: JSON.stringify({ acao: 'atualizarStatusLead', leadId, novoStatus }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.status === 'ok') {
+        buscarLeadsNaoAtribuidos(); // atualizar lista após status
+      } else {
+        alert('Erro ao atualizar status: ' + (json.mensagem || ''));
+      }
+    } catch (error) {
+      alert('Erro na comunicação: ' + error.message);
     }
-
-    return true;
-  });
-
-  const totalPaginas = Math.max(1, Math.ceil(gerais.length / leadsPorPagina));
-  const paginaCorrigida = Math.min(paginaAtual, totalPaginas);
-
-  const usuariosAtivos = usuarios.filter((u) => u.status === 'Ativo');
-  const isAdmin = usuarioLogado?.id === 1;
-
-  const handleSelect = (leadId, userId) => {
-    setSelecionados((prev) => ({
-      ...prev,
-      [leadId]: Number(userId),
-    }));
   };
 
-  const handleEnviar = (leadId) => {
-    const userId = selecionados[leadId];
-    if (!userId) {
-      alert('Selecione um usuário antes de enviar.');
-      return;
-    }
-    transferirLead(leadId, userId);
-  };
-
-  const handleAlterar = (leadId) => {
-    setSelecionados((prev) => ({
-      ...prev,
-      [leadId]: '',
-    }));
-    transferirLead(leadId, null);
-  };
-
-  const inicio = (paginaCorrigida - 1) * leadsPorPagina;
-  const fim = inicio + leadsPorPagina;
-  const leadsPagina = gerais.slice(inicio, fim);
-
-  const handlePaginaAnterior = () => {
-    setPaginaAtual((prev) => Math.max(prev - 1, 1));
-  };
-
-  const handlePaginaProxima = () => {
-    setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas));
-  };
-
-  const formatarData = (dataStr) => {
-    if (!dataStr) return '';
-    const data = new Date(dataStr);
-    return data.toLocaleDateString('pt-BR');
-  };
+  // Paginação simples
+  const totalPaginas = Math.ceil(leads.length / itensPorPagina);
+  const leadsPagina = leads.slice((paginaAtual - 1) * itensPorPagina, paginaAtual * itensPorPagina);
 
   return (
-    <div style={{ padding: '20px' }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '15px',
-        gap: '10px',
-        flexWrap: 'wrap',
-      }}>
-        <h1 style={{ margin: 0 }}>Leads</h1>
+    <div>
+      <h2>Leads Não Atribuídos</h2>
+      {loading && <p>Carregando leads...</p>}
+      {erro && <p style={{ color: 'red' }}>{erro}</p>}
+      {!loading && !erro && leadsPagina.length === 0 && <p>Não há leads não atribuídos.</p>}
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          flexGrow: 1,
-          justifyContent: 'center',
-          minWidth: '300px',
-        }}>
-          <button onClick={aplicarFiltroNome} style={{
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '6px 14px',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}>
-            Filtrar
-          </button>
-          <input
-            type="text"
-            placeholder="Filtrar por nome"
-            value={nomeInput}
-            onChange={(e) => setNomeInput(e.target.value)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              width: '220px',
-              maxWidth: '100%',
-            }}
-            title="Filtrar leads pelo nome (contém)"
-          />
-        </div>
+      {leadsPagina.map(lead => (
+        <Lead
+          key={lead.id}
+          lead={lead}
+          onUpdateStatus={atualizarStatus}
+          disabledConfirm={false}
+        />
+      ))}
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          minWidth: '220px',
-        }}>
-          <button onClick={aplicarFiltroData} style={{
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '6px 14px',
-            cursor: 'pointer',
-          }}>
-            Filtrar
-          </button>
-          <input
-            type="date"
-            value={dataInput}
-            onChange={(e) => setDataInput(e.target.value)}
-            style={{
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: '1px solid #ccc',
-              cursor: 'pointer',
-            }}
-            title="Filtrar leads pela data exata de criação"
-          />
-        </div>
+      {/* Exemplo para atribuir usuário (básico) */}
+      <div style={{ marginTop: 20 }}>
+        <input
+          type="text"
+          placeholder="Seu nome para atribuir"
+          value={usuario}
+          onChange={e => setUsuario(e.target.value)}
+          style={{ marginRight: 10 }}
+        />
+        <button
+          onClick={() => {
+            if (!usuario) {
+              alert('Digite seu nome para atribuir o lead');
+              return;
+            }
+            if (leadsPagina.length === 0) {
+              alert('Nenhum lead na página para atribuir');
+              return;
+            }
+            atribuirLead(leadsPagina[0].id, usuario);
+          }}
+        >
+          Atribuir primeiro lead da página
+        </button>
       </div>
 
-      {gerais.length === 0 ? (
-        <p>Não há leads pendentes.</p>
-      ) : (
-        <>
-          {leadsPagina.map((lead) => {
-            const responsavel = usuarios.find((u) => u.id === lead.usuarioId);
-
-            return (
-              <div
-                key={lead.id}
-                style={{
-                  border: '1px solid #ccc',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  marginBottom: '15px',
-                  position: 'relative',
-                }}
-              >
-                <Lead
-                  lead={lead}
-                  onUpdateStatus={onUpdateStatus}
-                  disabledConfirm={!lead.usuarioId}
-                />
-
-                {lead.usuarioId && responsavel ? (
-                  <div style={{ marginTop: '10px' }}>
-                    <p style={{ color: '#28a745' }}>
-                      Transferido para <strong>{responsavel.nome}</strong>
-                    </p>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleAlterar(lead.id)}
-                        style={{
-                          marginTop: '5px',
-                          padding: '5px 12px',
-                          backgroundColor: '#ffc107',
-                          color: '#000',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Alterar
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      marginTop: '10px',
-                      display: 'flex',
-                      gap: '10px',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <select
-                      value={selecionados[lead.id] || ''}
-                      onChange={(e) => handleSelect(lead.id, e.target.value)}
-                      style={{
-                        padding: '5px',
-                        borderRadius: '4px',
-                        border: '1px solid #ccc',
-                      }}
-                    >
-                      <option value="">Selecione usuário ativo</option>
-                      {usuariosAtivos.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.nome}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleEnviar(lead.id)}
-                      style={{
-                        padding: '5px 12px',
-                        backgroundColor: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Enviar
-                    </button>
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: '10px',
-                    right: '15px',
-                    fontSize: '12px',
-                    color: '#888',
-                    fontStyle: 'italic',
-                  }}
-                  title={`Criado em: ${formatarData(lead.createdAt)}`}
-                >
-                  {formatarData(lead.createdAt)}
-                </div>
-              </div>
-            );
-          })}
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '15px',
-              marginTop: '20px',
-            }}
-          >
-            <button
-              onClick={handlePaginaAnterior}
-              disabled={paginaCorrigida <= 1}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: '1px solid #ccc',
-                cursor: paginaCorrigida <= 1 ? 'not-allowed' : 'pointer',
-                backgroundColor: paginaCorrigida <= 1 ? '#f0f0f0' : '#fff',
-              }}
-            >
-              Anterior
-            </button>
-            <span style={{ alignSelf: 'center' }}>
-              Página {paginaCorrigida} de {totalPaginas}
-            </span>
-            <button
-              onClick={handlePaginaProxima}
-              disabled={paginaCorrigida >= totalPaginas}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: '1px solid #ccc',
-                cursor: paginaCorrigida >= totalPaginas ? 'not-allowed' : 'pointer',
-                backgroundColor: paginaCorrigida >= totalPaginas ? '#f0f0f0' : '#fff',
-              }}
-            >
-              Próxima
-            </button>
-          </div>
-        </>
-      )}
+      {/* Paginação */}
+      <div style={{ marginTop: 20 }}>
+        <button
+          disabled={paginaAtual <= 1}
+          onClick={() => setPaginaAtual(paginaAtual - 1)}
+          style={{ marginRight: 10 }}
+        >
+          Anterior
+        </button>
+        <span>Página {paginaAtual} de {totalPaginas}</span>
+        <button
+          disabled={paginaAtual >= totalPaginas}
+          onClick={() => setPaginaAtual(paginaAtual + 1)}
+          style={{ marginLeft: 10 }}
+        >
+          Próximo
+        </button>
+      </div>
     </div>
   );
 };
