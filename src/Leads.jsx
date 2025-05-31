@@ -1,193 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import Lead from './components/Lead';
 
-const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
+// Função para buscar leads não atribuídos no GAS
+async function buscarLeadsNaoAtribuidos() {
+  const url = 'https://script.google.com/macros/s/SEU_DEPLOY_ID_AQUI/exec?acao=listarLeadsNaoAtribuidos';
 
-const Leads = ({ leads, leadsNaoAtribuidos = [], usuarios, onUpdateStatus, transferirLead, usuarioLogado }) => {
-  const [selecionados, setSelecionados] = useState({}); // { [leadId]: userId }
-  const [paginaAtual, setPaginaAtual] = useState(1);
+  try {
+    const response = await fetch(url, { method: 'POST' });
+    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
 
-  // Estado interno para manter lista de leads atualizada (inicializa com leads passados)
-  const [leadsState, setLeadsState] = useState(leads);
+    const data = await response.json();
+    if (data.status !== 'ok') throw new Error(data.mensagem || 'Erro desconhecido');
 
-  // Sincroniza leadsState com prop leads inicial (se leads mudar do pai)
-  useEffect(() => {
-    setLeadsState(leads);
-  }, [leads]);
+    return data.leads; // Array de leads vindos do GAS
+  } catch (error) {
+    console.error('Erro ao buscar leads:', error);
+    throw error;
+  }
+}
 
-  // Ao receber leadsNaoAtribuidos, atualiza leadsState, adicionando leads não atribuídos que ainda não existem
-  useEffect(() => {
-    if (!leadsNaoAtribuidos || leadsNaoAtribuidos.length === 0) return;
+const Leads = ({ usuarios }) => {
+  const [leads, setLeads] = useState([]); // leads do GAS
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-    setLeadsState((prevLeads) => {
-      // IDs já existentes
-      const idsExistentes = new Set(prevLeads.map((l) => l.id));
-
-      // Filtra leadsNaoAtribuidos que ainda não existem
-      const novosLeads = leadsNaoAtribuidos.filter((lead) => !idsExistentes.has(lead.id));
-
-      if (novosLeads.length === 0) return prevLeads;
-
-      return [...novosLeads, ...prevLeads];
-    });
-  }, [leadsNaoAtribuidos]);
-
-  // Estados para filtro por data
+  // Filtros como seus exemplos anteriores
+  const [nomeInput, setNomeInput] = useState('');
   const [dataInput, setDataInput] = useState('');
+  const [filtroNome, setFiltroNome] = useState('');
   const [filtroData, setFiltroData] = useState('');
 
-  // Estados para filtro por nome
-  const [nomeInput, setNomeInput] = useState('');
-  const [filtroNome, setFiltroNome] = useState('');
-
-  // Buscar leads atualizados do Google Sheets
-  const buscarLeadsAtualizados = async () => {
-    try {
-      const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL);
-      if (response.ok) {
-        const dadosLeads = await response.json();
-        setLeadsState(dadosLeads);
-      } else {
-        console.error('Erro ao buscar leads:', response.statusText);
+  useEffect(() => {
+    async function carregarLeads() {
+      setLoading(true);
+      setError(null);
+      try {
+        const todosLeads = await buscarLeadsNaoAtribuidos();
+        // Aqui filtramos os leads com status "Em contato" ou "Sem contato"
+        const ativos = todosLeads.filter(lead => {
+          const status = lead.status?.toLowerCase();
+          return status === 'em contato' || status === 'sem contato' || status === '';
+        });
+        setLeads(ativos);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Erro ao buscar leads:', error);
     }
-  };
+    carregarLeads();
+  }, []);
 
-  const leadsPorPagina = 10;
-
-  // Função para normalizar strings (remover acento, pontuação, espaços, etc)
-  const normalizarTexto = (texto = '') => {
+  // Função para normalizar texto (remover acentos etc)
+  const normalizarTexto = (texto) => {
     return texto
       .toLowerCase()
-      .normalize('NFD') // separa os acentos
-      .replace(/[\u0300-\u036f]/g, '') // remove acentos
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()@\+\?><\[\]\+]/g, '') // remove pontuação
-      .replace(/\s+/g, ' ') // substitui múltiplos espaços por um espaço
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[.,]/g, '')
       .trim();
+  };
+
+  const aplicarFiltroNome = () => {
+    setFiltroNome(nomeInput.trim());
   };
 
   const aplicarFiltroData = () => {
     setFiltroData(dataInput);
-    setFiltroNome('');
-    setNomeInput('');
-    setPaginaAtual(1);
   };
 
-  const aplicarFiltroNome = () => {
-    const filtroLimpo = nomeInput.trim();
-    setFiltroNome(filtroLimpo);
-    setFiltroData('');
-    setDataInput('');
-    setPaginaAtual(1);
-  };
-
-  const isSameDate = (leadDateStr, filtroStr) => {
-    if (!filtroStr) return true;
-    const leadDate = leadDateStr?.slice(0, 10);
-    const filtroDate = filtroStr;
-    return leadDate === filtroDate;
-  };
-
-  const nomeContemFiltro = (leadNome, filtroNome) => {
-    if (!filtroNome) return true;
-    if (!leadNome) return false;
-
-    const nomeNormalizado = normalizarTexto(leadNome);
-    const filtroNormalizado = normalizarTexto(filtroNome);
-
-    return nomeNormalizado.includes(filtroNormalizado);
-  };
-
-  // Filtragem dos leads pendentes + filtro data ou nome
-  const gerais = leadsState.filter((lead) => {
-    if (lead.status === 'Fechado' || lead.status === 'Perdido') return false;
-
-    if (filtroData) {
-      return isSameDate(lead.createdAt, filtroData);
-    }
-
+  const leadsFiltrados = leads.filter((lead) => {
     if (filtroNome) {
-      // Usando lead.name aqui
-      return nomeContemFiltro(lead.name, filtroNome);
+      const nomeNormalizado = normalizarTexto(lead.name);
+      const filtroNormalizado = normalizarTexto(filtroNome);
+      if (!nomeNormalizado.includes(filtroNormalizado)) {
+        return false;
+      }
     }
-
+    if (filtroData) {
+      if (!lead.createdAt || !lead.createdAt.startsWith(filtroData)) {
+        return false;
+      }
+    }
     return true;
   });
 
-  const totalPaginas = Math.max(1, Math.ceil(gerais.length / leadsPorPagina));
-  const paginaCorrigida = Math.min(paginaAtual, totalPaginas);
-
-  const usuariosAtivos = usuarios.filter((u) => u.status === 'Ativo');
-  const isAdmin = usuarioLogado?.id === 1;
-
-  const handleSelect = (leadId, userId) => {
-    setSelecionados((prev) => ({
-      ...prev,
-      [leadId]: Number(userId),
-    }));
-  };
-
-  const handleEnviar = (leadId) => {
-    const userId = selecionados[leadId];
-    if (!userId) {
-      alert('Selecione um usuário antes de enviar.');
-      return;
-    }
-    transferirLead(leadId, userId);
-  };
-
-  const handleAlterar = (leadId) => {
-    setSelecionados((prev) => ({
-      ...prev,
-      [leadId]: '',
-    }));
-    transferirLead(leadId, null);
-  };
-
-  const inicio = (paginaCorrigida - 1) * leadsPorPagina;
-  const fim = inicio + leadsPorPagina;
-  const leadsPagina = gerais.slice(inicio, fim);
-
-  const handlePaginaAnterior = () => {
-    setPaginaAtual((prev) => Math.max(prev - 1, 1));
-  };
-
-  const handlePaginaProxima = () => {
-    setPaginaAtual((prev) => Math.min(prev + 1, totalPaginas));
-  };
-
-  const formatarData = (dataStr) => {
-    if (!dataStr) return '';
-    const data = new Date(dataStr);
-    return data.toLocaleDateString('pt-BR');
-  };
+  if (loading) return <p>Carregando leads...</p>;
+  if (error) return <p>Erro ao carregar leads: {error}</p>;
 
   return (
     <div style={{ padding: '20px' }}>
-      {/* Linha de filtros */}
+      <h1>Leads</h1>
+
+      {/* Container filtros: nome centralizado, data canto direito */}
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '15px',
-          gap: '10px',
+          marginBottom: '20px',
           flexWrap: 'wrap',
+          gap: '10px',
         }}
       >
-        <h1 style={{ margin: 0 }}>Leads</h1>
-
-        {/* Filtro nome - centralizado */}
+        {/* Filtro nome: centralizado */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            flexGrow: 1,
+            flex: '1',
             justifyContent: 'center',
-            minWidth: '300px',
+            minWidth: '280px',
           }}
         >
           <button
@@ -200,6 +123,7 @@ const Leads = ({ leads, leadsNaoAtribuidos = [], usuarios, onUpdateStatus, trans
               padding: '6px 14px',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
+              marginRight: '8px',
             }}
           >
             Filtrar
@@ -217,16 +141,20 @@ const Leads = ({ leads, leadsNaoAtribuidos = [], usuarios, onUpdateStatus, trans
               maxWidth: '100%',
             }}
             title="Filtrar leads pelo nome (contém)"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') aplicarFiltroNome();
+            }}
           />
         </div>
 
-        {/* Filtro data - direita */}
+        {/* Filtro data: canto direito */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            minWidth: '220px',
+            minWidth: '230px',
+            justifyContent: 'flex-end',
           }}
         >
           <button
@@ -238,6 +166,8 @@ const Leads = ({ leads, leadsNaoAtribuidos = [], usuarios, onUpdateStatus, trans
               borderRadius: '6px',
               padding: '6px 14px',
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              marginRight: '8px',
             }}
           >
             Filtrar
@@ -251,161 +181,47 @@ const Leads = ({ leads, leadsNaoAtribuidos = [], usuarios, onUpdateStatus, trans
               borderRadius: '6px',
               border: '1px solid #ccc',
               cursor: 'pointer',
+              minWidth: '140px',
             }}
             title="Filtrar leads pela data exata de criação"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') aplicarFiltroData();
+            }}
           />
         </div>
       </div>
 
-      {gerais.length === 0 ? (
-        <p>Não há leads pendentes.</p>
+      {leadsFiltrados.length === 0 ? (
+        <p>Não há leads que correspondam ao filtro aplicado.</p>
       ) : (
-        <>
-          {leadsPagina.map((lead) => {
-            const responsavel = usuarios.find((u) => u.id === lead.usuarioId);
+        leadsFiltrados.map(lead => {
+          const containerStyle = {
+            border: '2px solid #2196F3',
+            backgroundColor: '#e3f2fd',
+            padding: '15px',
+            marginBottom: '15px',
+            borderRadius: '5px'
+          };
 
-            return (
-              <div
-                key={lead.id}
-                style={{
-                  border: '1px solid #ccc',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  marginBottom: '15px',
-                  position: 'relative',
-                }}
-              >
-                <Lead
-                  lead={lead}
-                  onUpdateStatus={onUpdateStatus}
-                  disabledConfirm={!lead.usuarioId}
-                />
+          const responsavel = usuarios.find(u => u.id === lead.usuarioId);
 
-                {lead.usuarioId && responsavel ? (
-                  <div style={{ marginTop: '10px' }}>
-                    <p style={{ color: '#28a745' }}>
-                      Transferido para <strong>{responsavel.nome}</strong>
-                    </p>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleAlterar(lead.id)}
-                        style={{
-                          marginTop: '5px',
-                          padding: '5px 12px',
-                          backgroundColor: '#ffc107',
-                          color: '#000',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Alterar
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      marginTop: '10px',
-                      display: 'flex',
-                      gap: '10px',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <select
-                      value={selecionados[lead.id] || ''}
-                      onChange={(e) => handleSelect(lead.id, e.target.value)}
-                      style={{
-                        padding: '5px',
-                        borderRadius: '4px',
-                        border: '1px solid #ccc',
-                      }}
-                    >
-                      <option value="">Selecione usuário ativo</option>
-                      {usuariosAtivos.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.nome}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleEnviar(lead.id)}
-                      style={{
-                        padding: '5px 12px',
-                        backgroundColor: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Enviar
-                    </button>
-                  </div>
-                )}
+          return (
+            <div key={lead.id} style={containerStyle}>
+              <h3>{lead.name}</h3>
+              <p><strong>Modelo:</strong> {lead.vehicleModel}</p>
+              <p><strong>Ano/Modelo:</strong> {lead.vehicleYearModel}</p>
+              <p><strong>Cidade:</strong> {lead.city}</p>
+              <p><strong>Telefone:</strong> {lead.phone}</p>
+              <p><strong>Tipo de Seguro:</strong> {lead.insuranceType}</p>
 
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: '10px',
-                    right: '15px',
-                    fontSize: '12px',
-                    color: '#666',
-                    fontStyle: 'italic',
-                  }}
-                  title={`Data de criação: ${formatarData(lead.createdAt)}`}
-                >
-                  {formatarData(lead.createdAt)}
-                </div>
-              </div>
-            );
-          })}
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '10px',
-              marginTop: '20px',
-            }}
-          >
-            <button
-              onClick={handlePaginaAnterior}
-              disabled={paginaCorrigida === 1}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: paginaCorrigida === 1 ? '#ccc' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: paginaCorrigida === 1 ? 'not-allowed' : 'pointer',
-              }}
-            >
-              Anterior
-            </button>
-
-            <span style={{ alignSelf: 'center' }}>
-              Página {paginaCorrigida} de {totalPaginas}
-            </span>
-
-            <button
-              onClick={handlePaginaProxima}
-              disabled={paginaCorrigida === totalPaginas}
-              style={{
-                padding: '8px 16px',
-                backgroundColor:
-                  paginaCorrigida === totalPaginas ? '#ccc' : '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor:
-                  paginaCorrigida === totalPaginas ? 'not-allowed' : 'pointer',
-              }}
-            >
-              Próximo
-            </button>
-          </div>
-        </>
+              {responsavel && (
+                <p style={{ marginTop: '10px', color: '#007bff' }}>
+                  Transferido para <strong>{responsavel.nome}</strong>
+                </p>
+              )}
+            </div>
+          );
+        })
       )}
     </div>
   );
