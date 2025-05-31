@@ -7,7 +7,6 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Função para carregar leads do Google Sheets via Google Apps Script
   const fetchLeads = async () => {
     setLoading(true);
     setError(null);
@@ -16,14 +15,12 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
       const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL);
       const data = await response.json();
 
-      // Tratar resposta: se for array direto, usar; se for objeto com contents, usar contents
-      const fetchedLeads = Array.isArray(data) ? data : data.contents;
+      const fetchedLeads = Array.isArray(data) ? data : (data && data.contents ? data.contents : []);
 
-      if (!fetchedLeads) {
-        throw new Error('Resposta inválida: leads não encontrados');
+      if (!fetchedLeads || fetchedLeads.length === 0) {
+        console.warn('Nenhum lead encontrado na resposta.');
       }
 
-      // Atualiza o estado local com os leads buscados
       setLeads(fetchedLeads);
     } catch (err) {
       setError('Erro ao carregar leads: ' + err.message);
@@ -33,20 +30,16 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
     }
   };
 
-  // Carregar leads na montagem do componente
   useEffect(() => {
     fetchLeads();
   }, []);
 
-  // Se o leadsProp mudar, atualiza local (sincronização básica)
   useEffect(() => {
     setLeads(leadsProp);
   }, [leadsProp]);
 
-  // Função para alterar status de um lead localmente e também avisar a função passada por props
   const handleStatusChange = (id, novoStatus) => {
     onUpdateStatus(id, novoStatus);
-
     setLeads((prev) =>
       prev.map((lead) => (lead.id === id ? { ...lead, status: novoStatus } : lead))
     );
@@ -85,7 +78,6 @@ const Leads = ({ leads: leadsProp, usuarios, onUpdateStatus, transferirLead, usu
               <option value="Perdido">Perdido</option>
             </select>
 
-            {/* Exemplo simples de transferência para usuário (se desejar, pode expandir) */}
             <div className="mt-2">
               <label htmlFor={`usuario-transferir-${lead.id}`} className="mr-2">Transferir para:</label>
               <select
