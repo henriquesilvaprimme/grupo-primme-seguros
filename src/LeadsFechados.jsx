@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // Função para buscar leads não atribuídos no GAS
 async function buscarLeadsNaoAtribuidos() {
-  const url = 'https://script.google.com/macros/s/SEU_DEPLOY_ID_AQUI/exec?acao=listarLeadsNaoAtribuidos';
+  const url = 'https://script.google.com/macros/s/AKfycbwbvFNnBu6yK6ZPc94QvPsi9aRxms2mmq45UQ2zbgRZb1YTPdfFcnGoAAc2Nq-mVabr/exec';
 
   try {
     const response = await fetch(url, { method: 'POST' });
