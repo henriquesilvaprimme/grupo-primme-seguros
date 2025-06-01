@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
+  const [senhaVisivel, setSenhaVisivel] = useState({});
+
   const handleToggleStatus = (id, statusAtual) => {
     const novoStatus = statusAtual === 'Ativo' ? 'Inativo' : 'Ativo';
     atualizarStatusUsuario(id, novoStatus);
@@ -9,6 +11,10 @@ const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
   const handleToggleTipo = (id, tipoAtual) => {
     const novoTipo = tipoAtual === 'Admin' ? '' : 'Admin';
     atualizarStatusUsuario(id, null, novoTipo);
+  };
+
+  const toggleVisibilidadeSenha = (id) => {
+    setSenhaVisivel((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   return (
@@ -21,6 +27,7 @@ const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
             <tr>
               <th className="py-3 px-6 text-left">Nome</th>
               <th className="py-3 px-6 text-left">E-mail</th>
+              <th className="py-3 px-6 text-left">Senha</th>
               <th className="py-3 px-6 text-left">Status</th>
               <th className="py-3 px-6 text-left">Tipo</th>
               <th className="py-3 px-6 text-left">Ações</th>
@@ -31,6 +38,22 @@ const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
               <tr key={usuario.id} className="border-b hover:bg-gray-50 transition">
                 <td className="py-3 px-6">{usuario.nome}</td>
                 <td className="py-3 px-6">{usuario.email}</td>
+                <td className="py-3 px-6">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type={senhaVisivel[usuario.id] ? 'text' : 'password'}
+                      value={usuario.senha}
+                      readOnly
+                      className="border rounded px-2 py-1 w-32 text-sm"
+                    />
+                    <button
+                      onClick={() => toggleVisibilidadeSenha(usuario.id)}
+                      className="text-gray-500 hover:text-gray-700 text-sm"
+                    >
+                      {senhaVisivel[usuario.id] ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                </td>
                 <td className="py-3 px-6">
                   <span
                     className={`px-3 py-1 rounded-full text-sm font-semibold ${
