@@ -50,8 +50,8 @@ const App = () => {
           const formattedLeads = data.map((item, index) => ({
             id: item.id ? Number(item.id) : index + 1,
             name: item.name || item.Name || '',
-            vehicleModel: item.vehiclemodel || item.vehicleModel || '',
-            vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
+            vehicleModel: item.vehicleModel || item.vehiclemodel || '',
+            vehicleYearModel: item.vehicleYearModel || '',
             city: item.city || '',
             phone: item.phone || item.Telefone || '',
             insuranceType: item.insuranceType || '',
@@ -83,18 +83,52 @@ const App = () => {
     };
 
     fetchLeadsFromSheet();
-    const interval = setInterval(fetchLeadsFromSheet, 5000);
+
+    const interval = setInterval(() => {
+      fetchLeadsFromSheet();
+    }, 5000);
+
     return () => clearInterval(interval);
   }, [leadSelecionado]);
 
   const [usuarios, setUsuarios] = useState([
-    { id: 1, usuario: '1', nome: 'Administrador 1', email: 'admin1@example.com', senha: '1', status: 'Ativo', tipo: 'Admin' },
-    { id: 2, usuario: 'maria', nome: 'Maria Oliveira', email: 'maria@example.com', senha: 'senha123', status: 'Ativo', tipo: 'Usuario' },
-    { id: 3, usuario: 'joao', nome: 'João Souza', email: 'joao@example.com', senha: 'joaopass', status: 'Ativo', tipo: 'Usuario' },
-    { id: 4, usuario: 'admin2', nome: 'Administrador 2', email: 'admin2@example.com', senha: 'adminpass', status: 'Ativo', tipo: 'Admin' },
+    {
+      id: 1,
+      usuario: '1',
+      nome: 'Administrador 1',
+      email: 'admin1@example.com',
+      senha: '1',
+      status: 'Ativo',
+      tipo: 'Admin',
+    },
+    {
+      id: 2,
+      usuario: 'maria',
+      nome: 'Maria Oliveira',
+      email: 'maria@example.com',
+      senha: 'senha123',
+      status: 'Ativo',
+      tipo: 'Usuario',
+    },
+    {
+      id: 3,
+      usuario: 'joao',
+      nome: 'João Souza',
+      email: 'joao@example.com',
+      senha: 'joaopass',
+      status: 'Ativo',
+      tipo: 'Usuario',
+    },
+    {
+      id: 4,
+      usuario: 'admin2',
+      nome: 'Administrador 2',
+      email: 'admin2@example.com',
+      senha: 'adminpass',
+      status: 'Ativo',
+      tipo: 'Admin',
+    },
   ]);
-
-  const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
 
   const adicionarUsuario = (usuario) => {
     setUsuarios((prev) => [...prev, { ...usuario, id: prev.length + 1 }]);
@@ -109,7 +143,6 @@ const App = () => {
     );
 
     if (novoStatus === 'Fechado') {
-      setUltimoFechadoId(id);
       postToSheet('fecharLead', { leadId: id });
     } else if (novoStatus === 'Perdido') {
       postToSheet('perderLead', { leadId: id });
@@ -169,9 +202,11 @@ const App = () => {
 
   const onAbrirLead = (lead) => {
     setLeadSelecionado(lead);
+
     let path = '/leads';
     if (lead.status === 'Fechado') path = '/leads-fechados';
     else if (lead.status === 'Perdido') path = '/leads-perdidos';
+
     navigate(path);
   };
 
@@ -222,7 +257,8 @@ const App = () => {
 
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
-      <Sidebar isAdmin={isAdmin} nomeUsuario={loginInput} />
+      <Sidebar isAdmin={isAdmin} nomeUsuario={usuarioLogado?.nome || ''} />
+
       <main style={{ flex: 1, overflow: 'auto' }}>
         <Routes>
           <Route
@@ -243,7 +279,7 @@ const App = () => {
             path="/leads"
             element={
               <Leads
-                leads={leads}
+                leads={leads.filter((l) => l.status !== 'Fechado' && l.status !== 'Perdido')}
                 onAbrirLead={onAbrirLead}
                 atualizarStatusLead={atualizarStatusLead}
                 leadSelecionado={leadSelecionado}
