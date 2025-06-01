@@ -39,8 +39,6 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
             ID: lead.id,
             Status: status
           }
-        })
-      });
 
       const data = await res.json();
       console.log('Resposta moverLead:', data);
