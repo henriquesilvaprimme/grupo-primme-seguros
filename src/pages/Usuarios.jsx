@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
   const [senhaVisivel, setSenhaVisivel] = useState({});
@@ -9,7 +10,7 @@ const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
   };
 
   const handleToggleTipo = (id, tipoAtual) => {
-    const novoTipo = tipoAtual === 'Admin' ? '' : 'Admin';
+    const novoTipo = tipoAtual === 'Admin' ? 'Usuário Comum' : 'Admin';
     atualizarStatusUsuario(id, null, novoTipo);
   };
 
@@ -48,9 +49,9 @@ const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
                     />
                     <button
                       onClick={() => toggleVisibilidadeSenha(usuario.id)}
-                      className="text-gray-500 hover:text-gray-700 text-sm"
+                      className="text-gray-500 hover:text-gray-700"
                     >
-                      {senhaVisivel[usuario.id] ? '🙈' : '👁️'}
+                      {senhaVisivel[usuario.id] ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </td>
@@ -69,7 +70,7 @@ const Usuarios = ({ usuarios, atualizarStatusUsuario }) => {
                       usuario.tipo === 'Admin' ? 'bg-blue-100 text-blue-700' : ''
                     }`}
                   >
-                    {usuario.tipo || 'Usuário Comum'}
+                    {usuario.tipo === 'Admin' ? 'Admin' : 'Usuário Comum'}
                   </span>
                 </td>
                 <td className="py-3 px-6 flex gap-4 items-center">
