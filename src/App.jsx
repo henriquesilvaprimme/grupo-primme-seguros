@@ -21,298 +21,355 @@ const App = () => {
   const [senhaInput, setSenhaInput] = useState('');
   const [usuarioLogado, setUsuarioLogado] = useState(null);
 
-  // INÍCIO - sincronização leads via Google Sheets
+  // --- INÍCIO - sincronização leads via Google Sheets ---
   const [leads, setLeads] = useState([]);
-  const [leadSelecionado, setLeadSelecionado] = useState(null); // movido para cá para usar no useEffect
+  const [leadSelecionado, setLeadSelecionado] = useState(null);
 
+  const [leadsFechados, setLeadsFechados] = useState([]);
+  const [leadsPerdidos, setLeadsPerdidos] = useState([]);
+
+  // Usuários já iniciam com Admin fixo incluído
+  const [usuarios, setUsuarios] = useState([
+    {
+      id: 0,
+      usuario: 'admin',
+      nome: 'Administrador',
+      email: 'admin@example.com',
+      senha: 'admin123',
+      status: 'Ativo',
+      tipo: 'Admin',
+      ativo: true,
+    },
+  ]);
+
+  // Sincroniza usuários do Sheets e mantém o admin fixo
   useEffect(() => {
-    const fetchLeadsFromSheet = async () => {
+    const fetchUsuariosFromSheet = async () => {
       try {
-        const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getLeads');
+        const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getUsuarios');
         const data = await response.json();
-
         if (Array.isArray(data)) {
-          const formattedLeads = data.map((item, index) => ({
+          const formattedUsuarios = data.map((item, index) => ({
             id: item.id ? Number(item.id) : index + 1,
-            name: item.name || item.Name || '',
-            vehicleModel: item.vehiclemodel || item.vehicleModel || '',
-            vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
-            city: item.city || '',
-            phone: item.phone || item.Telefone || '',
-            insuranceType: item.insuranceType || '',
-            status: item.status || 'Selecione o status',
-            confirmado: item.confirmado === 'true' || item.confirmado === true,
-            insurer: item.insurer || '',
-            insurerConfirmed: item.insurerConfirmed === 'true' || item.insurerConfirmed === true,
-            usuarioId: item.usuarioId ? Number(item.usuarioId) : null,
-            premioLiquido: item.premioLiquido || '',
-            comissao: item.comissao || '',
-            parcelamento: item.parcelamento || '',
-            createdAt: item.createdAt || new Date().toISOString(),
+            usuario: item.usuario || '',
+            nome: item.nome || '',
+            email: item.email || '',
+            senha: item.senha || '',
+            status: item.status || 'Ativo',
+            tipo: item.tipo || 'Usuario',
+            ativo: item.ativo !== undefined ? item.ativo : true,
           }));
 
-          // Só atualiza leads se não houver lead selecionado para não atrapalhar o usuário
-          if (!leadSelecionado) {
-            setLeads(formattedLeads);
-          }
-        } else {
-          if (!leadSelecionado) {
-            setLeads([]);
-          }
+          setUsuarios((prevUsuarios) => {
+            // Verifica se admin já está no estado (deveria estar)
+            const adminExists = prevUsuarios.some(u => u.usuario === 'admin');
+            // Remove possível admin vindo do Sheets para evitar duplicidade
+            const usuariosSemAdmin = formattedUsuarios.filter(u => u.usuario !== 'admin');
+            if (adminExists) {
+              // Mantém admin fixo + usuários do Sheets (sem admin duplicado)
+              return [...prevUsuarios.filter(u => u.usuario === 'admin'), ...usuariosSemAdmin];
+            } else {
+              // Se por acaso não tinha admin, inclui admin fixo + todos os do Sheets
+              return [
+                {
+                  id: 0,
+                  usuario: 'admin',
+                  nome: 'Administrador',
+                  email: 'admin@example.com',
+                  senha: 'admin123',
+                  status: 'Ativo',
+                  tipo: 'Admin',
+                  ativo: true,
+                },
+                ...usuariosSemAdmin,
+              ];
+            }
+          });
         }
       } catch (error) {
-        console.error('Erro ao buscar leads do Google Sheets:', error);
-        if (!leadSelecionado) {
-          setLeads([]);
-        }
+        console.error('Erro ao buscar usuários do Google Sheets:', error);
       }
     };
 
-    fetchLeadsFromSheet();
+    fetchUsuariosFromSheet();
+  }, []);
+
+  // Função para carregar todos leads (normais, fechados e perdidos)
+  const fetchLeadsAllFromSheet = async () => {
+    try {
+      // Leads normais
+      const responseLeads = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getLeads');
+      const dataLeads = await responseLeads.json();
+
+      // Leads fechados
+      const responseFechados = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getLeadsFechados');
+      const dataFechados = await responseFechados.json();
+
+      // Leads perdidos
+      const responsePerdidos = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?action=getLeadsPerdidos');
+      const dataPerdidos = await responsePerdidos.json();
+
+      if (Array.isArray(dataLeads) && !leadSelecionado) {
+        const formattedLeads = dataLeads.map((item, index) => ({
+          id: item.id ? Number(item.id) : index + 1,
+          name: item.name || item.Name || '',
+          vehicleModel: item.vehiclemodel || item.vehicleModel || '',
+          vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
+          city: item.city || '',
+          phone: item.phone || item.Telefone || '',
+          insuranceType: item.insuranceType || '',
+          status: item.status || 'Selecione o status',
+          confirmado: item.confirmado === 'true' || item.confirmado === true,
+          insurer: item.insurer || '',
+          insurerConfirmed: item.insurerConfirmed === 'true' || item.insurerConfirmed === true,
+          usuarioId: item.usuarioId ? Number(item.usuarioId) : null,
+          premioLiquido: item.premioLiquido || '',
+          comissao: item.comissao || '',
+          parcelamento: item.parcelamento || '',
+          createdAt: item.createdAt || new Date().toISOString(),
+        }));
+        setLeads(formattedLeads);
+      }
+
+      if (Array.isArray(dataFechados)) {
+        const formattedFechados = dataFechados.map((item, index) => ({
+          id: item.id ? Number(item.id) : index + 1,
+          name: item.name || item.Name || '',
+          vehicleModel: item.vehiclemodel || item.vehicleModel || '',
+          vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
+          city: item.city || '',
+          phone: item.phone || item.Telefone || '',
+          insuranceType: item.insuranceType || '',
+          status: item.status || 'Fechado',
+          confirmado: item.confirmado === 'true' || item.confirmado === true,
+          insurer: item.insurer || '',
+          insurerConfirmed: item.insurerConfirmed === 'true' || item.insurerConfirmed === true,
+          usuarioId: item.usuarioId ? Number(item.usuarioId) : null,
+          premioLiquido: item.premioLiquido || '',
+          comissao: item.comissao || '',
+          parcelamento: item.parcelamento || '',
+          createdAt: item.createdAt || new Date().toISOString(),
+        }));
+        setLeadsFechados(formattedFechados);
+      }
+
+      if (Array.isArray(dataPerdidos)) {
+        const formattedPerdidos = dataPerdidos.map((item, index) => ({
+          id: item.id ? Number(item.id) : index + 1,
+          name: item.name || item.Name || '',
+          vehicleModel: item.vehiclemodel || item.vehicleModel || '',
+          vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
+          city: item.city || '',
+          phone: item.phone || item.Telefone || '',
+          insuranceType: item.insuranceType || '',
+          status: item.status || 'Perdido',
+          confirmado: item.confirmado === 'true' || item.confirmado === true,
+          insurer: item.insurer || '',
+          insurerConfirmed: item.insurerConfirmed === 'true' || item.insurerConfirmed === true,
+          usuarioId: item.usuarioId ? Number(item.usuarioId) : null,
+          premioLiquido: item.premioLiquido || '',
+          comissao: item.comissao || '',
+          parcelamento: item.parcelamento || '',
+          createdAt: item.createdAt || new Date().toISOString(),
+        }));
+        setLeadsPerdidos(formattedPerdidos);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar leads do Google Sheets:', error);
+      if (!leadSelecionado) {
+        setLeads([]);
+        setLeadsFechados([]);
+        setLeadsPerdidos([]);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchLeadsAllFromSheet();
 
     const interval = setInterval(() => {
-      fetchLeadsFromSheet();
+      fetchLeadsAllFromSheet();
     }, 5000);
 
     return () => clearInterval(interval);
   }, [leadSelecionado]);
-  // FIM - sincronização leads
 
-  // ARRAY DE USUÁRIOS ORIGINAL MANTIDO
-  const [usuarios, setUsuarios] = useState([
-    {
-      id: 1,
-      usuario: '1', // login
-      nome: 'Administrador 1',
-      email: 'admin1@example.com',
-      senha: '1',
-      status: 'Ativo',
-      tipo: 'Admin',
-    },
-    {
-      id: 2,
-      usuario: 'maria', // login
-      nome: 'Maria Oliveira',
-      email: 'maria@example.com',
-      senha: 'senha123',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 3,
-      usuario: 'joao', // login
-      nome: 'João Souza',
-      email: 'joao@example.com',
-      senha: 'joaopass',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 4,
-      usuario: 'admin2', // login
-      nome: 'Administrador 2',
-      email: 'admin2@example.com',
-      senha: 'adminpass',
-      status: 'Ativo',
-      tipo: 'Admin',
-    },
-  ]);
+  // Função para salvar os dados no Google Sheets (envio de updates)
+  const salvarDadosNoSheets = async (action, payload) => {
+    try {
+      const params = new URLSearchParams();
+      params.append('action', action);
+      for (const key in payload) {
+        if (payload[key] !== undefined && payload[key] !== null) {
+          params.append(key, payload[key]);
+        }
+      }
 
-  const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
+      const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL + '?' + params.toString());
+      const data = await response.json();
 
-  const adicionarUsuario = (usuario) => {
-    setUsuarios((prev) => [...prev, { ...usuario, id: prev.length + 1 }]);
+      return data;
+    } catch (error) {
+      console.error('Erro ao salvar dados no Google Sheets:', error);
+      return null;
+    }
   };
+  // --- FIM sincronização leads via Google Sheets ---
 
-  const atualizarStatusLead = (id, novoStatus) => {
+
+  // Funções que atualizam leads e sincronizam com o Google Sheets
+
+  const atualizarStatusLead = async (id, novoStatus) => {
     setLeads((prev) =>
       prev.map((lead) =>
         lead.id === id ? { ...lead, status: novoStatus, confirmado: true } : lead
       )
     );
 
+    await salvarDadosNoSheets('updateStatusLead', { id, status: novoStatus });
+
     if (novoStatus === 'Fechado') {
       setUltimoFechadoId(id);
+      // Também pode ser necessário mover o lead para leadsFechados? Isso deve ser tratado no backend/script.
     }
   };
 
-  const atualizarSeguradoraLead = (id, seguradora) => {
+  const atualizarSeguradoraLead = async (id, seguradora) => {
     setLeads((prev) =>
       prev.map((lead) =>
         lead.id === id ? { ...lead, insurer: seguradora } : lead
       )
     );
+    await salvarDadosNoSheets('updateInsurerLead', { id, insurer: seguradora });
   };
 
-  const confirmarSeguradoraLead = (id) => {
+  const confirmarSeguradoraLead = async (id) => {
     setLeads((prev) =>
       prev.map((lead) =>
         lead.id === id ? { ...lead, insurerConfirmed: true } : lead
       )
     );
+    await salvarDadosNoSheets('confirmInsurerLead', { id });
   };
 
-  const atualizarDetalhesLeadFechado = (id, campo, valor) => {
+  const atualizarDetalhesLeadFechado = async (id, campo, valor) => {
     setLeads((prev) =>
       prev.map((lead) =>
         lead.id === id ? { ...lead, [campo]: valor } : lead
       )
     );
+    await salvarDadosNoSheets('updateDetalheLeadFechado', { id, campo, valor });
   };
 
-  const transferirLead = (leadId, usuarioId) => {
+  const transferirLead = async (leadId, usuarioId) => {
     setLeads((prev) =>
       prev.map((lead) =>
-        lead.id === leadId ? { ...lead, usuarioId } : lead
+        lead.id === leadId ? { ...lead, usuarioId: usuarioId } : lead
       )
     );
+    await salvarDadosNoSheets('transferirLead', { id: leadId, usuarioId });
   };
 
-  const atualizarStatusUsuario = (id, novoStatus = null, novoTipo = null) => {
-    setUsuarios((prev) =>
-      prev.map((usuario) =>
-        usuario.id === id
-          ? {
-              ...usuario,
-              ...(novoStatus !== null ? { status: novoStatus } : {}),
-              ...(novoTipo !== null ? { tipo: novoTipo } : {}),
-            }
-          : usuario
-      )
-    );
-  };
-
-  const onAbrirLead = (lead) => {
-    setLeadSelecionado(lead);
-
-    let path = '/leads';
-    if (lead.status === 'Fechado') path = '/leads-fechados';
-    else if (lead.status === 'Perdido') path = '/leads-perdidos';
-
-    navigate(path);
-  };
+  // Login e autenticação
 
   const handleLogin = () => {
-    const usuarioEncontrado = usuarios.find(
-      (u) => u.usuario === loginInput && u.senha === senhaInput && u.status === 'Ativo'
+    const user = usuarios.find(
+      (u) =>
+        u.usuario.toLowerCase() === loginInput.toLowerCase() &&
+        u.senha === senhaInput &&
+        u.ativo === true
     );
-
-    if (usuarioEncontrado) {
+    if (user) {
       setIsAuthenticated(true);
-      setUsuarioLogado(usuarioEncontrado);
+      setUsuarioLogado(user);
+      setLoginInput('');
+      setSenhaInput('');
+      navigate('/');
     } else {
-      alert('Login ou senha inválidos ou usuário inativo.');
+      alert('Usuário ou senha inválidos!');
     }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setUsuarioLogado(null);
+    navigate('/login');
   };
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-100 to-indigo-200">
-        <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md">
-          <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Entrar no Painel</h2>
-          <input
-            type="text"
-            placeholder="Usuário"
-            value={loginInput}
-            onChange={(e) => setLoginInput(e.target.value)}
-            className="w-full mb-4 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
-          <input
-            type="password"
-            placeholder="Senha"
-            value={senhaInput}
-            onChange={(e) => setSenhaInput(e.target.value)}
-            className="w-full mb-6 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
-          <button
-            onClick={handleLogin}
-            className="w-full bg-indigo-500 text-white py-2 rounded-lg hover:bg-indigo-600 transition"
-          >
-            Entrar
-          </button>
-        </div>
+      <div className="login-container">
+        <h2>Login</h2>
+        <input
+          type="text"
+          placeholder="Usuário"
+          value={loginInput}
+          onChange={(e) => setLoginInput(e.target.value)}
+        />
+        <input
+          type="password"
+          placeholder="Senha"
+          value={senhaInput}
+          onChange={(e) => setSenhaInput(e.target.value)}
+        />
+        <button onClick={handleLogin}>Entrar</button>
       </div>
     );
   }
 
-  const isAdmin = usuarioLogado?.tipo === 'Admin';
-
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      <Sidebar isAdmin={isAdmin} nomeUsuario={loginInput} />
-
-      <main style={{ flex: 1, overflow: 'auto' }}>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route
-            path="/dashboard"
-            element={
-              <Dashboard
-                leads={
-                  isAdmin
-                    ? leads
-                    : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)
-                }
-              />
-            }
-          />
-          <Route
-            path="/leads"
-            element={
-              <Leads
-                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
-                usuarios={usuarios}
-                onUpdateStatus={atualizarStatusLead}
-                transferirLead={transferirLead}
-                usuarioLogado={usuarioLogado}
-              />
-            }
-          />
-          <Route
-            path="/leads-fechados"
-            element={
-              <LeadsFechados
-                leads={leads}
-                usuarios={usuarios}
-                onUpdateInsurer={atualizarSeguradoraLead}
-                onConfirmInsurer={confirmarSeguradoraLead}
-                onUpdateDetalhes={atualizarDetalhesLeadFechado}
-                ultimoFechadoId={ultimoFechadoId}
-                onAbrirLead={onAbrirLead}
-                leadSelecionado={leadSelecionado}
-              />
-            }
-          />
-          <Route
-            path="/leads-perdidos"
-            element={
-              <LeadsPerdidos
-                leads={leads}
-                usuarios={usuarios}
-                onAbrirLead={onAbrirLead}
-                leadSelecionado={leadSelecionado}
-              />
-            }
-          />
-          <Route path="/buscar-lead" element={<BuscarLead leads={leads} />} />
-          {isAdmin && (
-            <>
-              <Route path="/criar-usuario" element={<CriarUsuario adicionarUsuario={adicionarUsuario} />} />
-              <Route
-                path="/usuarios"
-                element={
-                  <Usuarios
-                    usuarios={usuarios}
-                    atualizarStatusUsuario={atualizarStatusUsuario}
-                  />
-                }
-              />
-            </>
-          )}
-          <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
-          <Route path="*" element={<h1 style={{ padding: 20 }}>Página não encontrada</h1>} />
-        </Routes>
-      </main>
+    <div className="app-container">
+      <Sidebar onLogout={handleLogout} usuarioLogado={usuarioLogado} />
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Dashboard
+              usuarioLogado={usuarioLogado}
+              leads={leads}
+              leadsFechados={leadsFechados}
+              leadsPerdidos={leadsPerdidos}
+              atualizarStatusLead={atualizarStatusLead}
+              atualizarSeguradoraLead={atualizarSeguradoraLead}
+              confirmarSeguradoraLead={confirmarSeguradoraLead}
+              atualizarDetalhesLeadFechado={atualizarDetalhesLeadFechado}
+              transferirLead={transferirLead}
+              usuarios={usuarios}
+            />
+          }
+        />
+        <Route
+          path="/leads"
+          element={<Leads leads={leads} usuarioLogado={usuarioLogado} />}
+        />
+        <Route
+          path="/leadsfechados"
+          element={
+            <LeadsFechados
+              leadsFechados={leadsFechados}
+              atualizarDetalhesLeadFechado={atualizarDetalhesLeadFechado}
+            />
+          }
+        />
+        <Route
+          path="/leadsperdidos"
+          element={<LeadsPerdidos leadsPerdidos={leadsPerdidos} />}
+        />
+        <Route
+          path="/buscarlead"
+          element={<BuscarLead leads={leads} />}
+        />
+        <Route
+          path="/criarusuario"
+          element={<CriarUsuario usuarios={usuarios} setUsuarios={setUsuarios} />}
+        />
+        <Route
+          path="/usuarios"
+          element={<Usuarios usuarios={usuarios} setUsuarios={setUsuarios} />}
+        />
+        <Route path="/ranking" element={<Ranking />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
     </div>
   );
 };
