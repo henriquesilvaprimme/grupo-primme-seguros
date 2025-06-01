@@ -72,7 +72,7 @@ const App = () => {
 
     const interval = setInterval(() => {
       fetchLeadsFromSheet();
-    }, 5000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [leadSelecionado]);
