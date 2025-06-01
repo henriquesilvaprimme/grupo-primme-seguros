@@ -13,68 +13,6 @@ import Ranking from './pages/Ranking';
 
 const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
 
-// INÍCIO - funções para comunicação com Google Sheets
-async function criarUsuario(dados) {
-  const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      tipo: 'criarUsuario',
-      payload: dados
-    }),
-    headers: { 'Content-Type': 'application/json' }
-  });
-  return response.json();
-}
-
-async function criarLead(dados) {
-  const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      tipo: 'criarLead',
-      payload: dados
-    }),
-    headers: { 'Content-Type': 'application/json' }
-  });
-  return response.json();
-}
-
-async function fecharLead(leadId) {
-  const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      tipo: 'fecharLead',
-      payload: { leadId }
-    }),
-    headers: { 'Content-Type': 'application/json' }
-  });
-  return response.json();
-}
-
-async function perderLead(leadId) {
-  const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      tipo: 'perderLead',
-      payload: { leadId }
-    }),
-    headers: { 'Content-Type': 'application/json' }
-  });
-  return response.json();
-}
-
-async function editarUsuario(dados) {
-  const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      tipo: 'editarUsuario',
-      payload: dados
-    }),
-    headers: { 'Content-Type': 'application/json' }
-  });
-  return response.json();
-}
-// FIM - funções para comunicação com Google Sheets
-
 const App = () => {
   const navigate = useNavigate();
 
@@ -134,7 +72,7 @@ const App = () => {
 
     const interval = setInterval(() => {
       fetchLeadsFromSheet();
-    }, 30000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [leadSelecionado]);
@@ -243,6 +181,37 @@ const App = () => {
     );
   };
 
+  // *** NOVA FUNÇÃO PARA FECHAR LEAD VIA GOOGLE SCRIPT ***
+  const fecharLead = async (leadId) => {
+    try {
+      const payload = {
+        acao: 'fecharLead',
+        leadId: leadId,
+      };
+
+      const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'sucesso') {
+        // Atualiza o status localmente para refletir a mudança
+        atualizarStatusLead(leadId, 'Fechado');
+        return { sucesso: true, mensagem: data.mensagem };
+      } else {
+        return { sucesso: false, mensagem: data.mensagem || 'Erro ao fechar lead.' };
+      }
+    } catch (error) {
+      return { sucesso: false, mensagem: 'Erro na requisição: ' + error.message };
+    }
+  };
+  // *** FIM DA NOVA FUNÇÃO ***
+
   const onAbrirLead = (lead) => {
     setLeadSelecionado(lead);
 
@@ -270,24 +239,24 @@ const App = () => {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-100 to-indigo-200">
         <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-8 text-center">Login</h2>
+          <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Entrar no Painel</h2>
           <input
             type="text"
             placeholder="Usuário"
             value={loginInput}
             onChange={(e) => setLoginInput(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded mb-4"
+            className="w-full mb-4 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
           <input
             type="password"
             placeholder="Senha"
             value={senhaInput}
             onChange={(e) => setSenhaInput(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded mb-6"
+            className="w-full mb-6 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
           <button
             onClick={handleLogin}
-            className="w-full bg-indigo-600 text-white p-3 rounded font-semibold hover:bg-indigo-700 transition"
+            className="w-full bg-indigo-500 text-white py-2 rounded-lg hover:bg-indigo-600 transition"
           >
             Entrar
           </button>
@@ -296,73 +265,83 @@ const App = () => {
     );
   }
 
+  const isAdmin = usuarioLogado?.tipo === 'Admin';
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar usuario={usuarioLogado} />
-      <main className="flex-1 p-6 bg-gray-100 overflow-auto">
+    <div style={{ display: 'flex', height: '100vh' }}>
+      <Sidebar isAdmin={isAdmin} nomeUsuario={loginInput} />
+
+      <main style={{ flex: 1, overflow: 'auto' }}>
         <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route
-            path="/"
-            element={<Dashboard usuario={usuarioLogado} />}
+            path="/dashboard"
+            element={
+              <Dashboard
+                leads={
+                  isAdmin
+                    ? leads
+                    : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)
+                }
+              />
+            }
           />
           <Route
             path="/leads"
             element={
               <Leads
-                leads={leads}
-                onAbrirLead={onAbrirLead}
-                atualizarStatusLead={atualizarStatusLead}
-                atualizarSeguradoraLead={atualizarSeguradoraLead}
-                confirmarSeguradoraLead={confirmarSeguradoraLead}
-                atualizarDetalhesLeadFechado={atualizarDetalhesLeadFechado}
+                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
+                usuarios={usuarios}
+                onUpdateStatus={atualizarStatusLead}
                 transferirLead={transferirLead}
                 usuarioLogado={usuarioLogado}
-                criarLead={criarLead}
-                fecharLead={fecharLead}
-                perderLead={perderLead}
+                fecharLead={fecharLead}  // <-- passei aqui a função nova para uso no Leads
               />
             }
           />
           <Route
             path="/leads-fechados"
             element={
-              <LeadsFechados leads={leads.filter(lead => lead.status === 'Fechado')} />
+              <LeadsFechados
+                leads={leads}
+                usuarios={usuarios}
+                onUpdateInsurer={atualizarSeguradoraLead}
+                onConfirmInsurer={confirmarSeguradoraLead}
+                onUpdateDetalhes={atualizarDetalhesLeadFechado}
+                ultimoFechadoId={ultimoFechadoId}
+                onAbrirLead={onAbrirLead}
+                leadSelecionado={leadSelecionado}
+              />
             }
           />
           <Route
             path="/leads-perdidos"
             element={
-              <LeadsPerdidos leads={leads.filter(lead => lead.status === 'Perdido')} />
-            }
-          />
-          <Route
-            path="/buscar-lead"
-            element={<BuscarLead leads={leads} />}
-          />
-          <Route
-            path="/usuarios"
-            element={
-              <Usuarios
+              <LeadsPerdidos
+                leads={leads}
                 usuarios={usuarios}
-                atualizarStatusUsuario={atualizarStatusUsuario}
-                editarUsuario={editarUsuario}
+                onAbrirLead={onAbrirLead}
+                leadSelecionado={leadSelecionado}
               />
             }
           />
-          <Route
-            path="/criar-usuario"
-            element={
-              <CriarUsuario
-                adicionarUsuario={adicionarUsuario}
-                criarUsuario={criarUsuario}
+          <Route path="/buscar-lead" element={<BuscarLead leads={leads} />} />
+          {isAdmin && (
+            <>
+              <Route path="/criar-usuario" element={<CriarUsuario adicionarUsuario={adicionarUsuario} />} />
+              <Route
+                path="/usuarios"
+                element={
+                  <Usuarios
+                    usuarios={usuarios}
+                    atualizarStatusUsuario={atualizarStatusUsuario}
+                  />
+                }
               />
-            }
-          />
-          <Route
-            path="/ranking"
-            element={<Ranking usuarios={usuarios} />}
-          />
-          <Route path="*" element={<Navigate to="/" />} />
+            </>
+          )}
+          <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
+          <Route path="*" element={<h1 style={{ padding: 20 }}>Página não encontrada</h1>} />
         </Routes>
       </main>
     </div>
