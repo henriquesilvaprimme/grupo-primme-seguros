@@ -3,6 +3,24 @@ import React, { useState } from 'react';
 const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
   const [status, setStatus] = useState(lead.status || '');
 
+  const enviarAtualizacaoParaSheets = async () => { // <- Adicionado para atualizacao
+  try {
+    await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: lead.id,
+        nome: lead.name,
+        status: status,
+        vendedor: lead.vendedor || '',
+        atualizadoEm: new Date().toISOString(),
+      })
+    });
+  } catch (error) {
+    console.error('Erro ao enviar atualização para o Google Sheets:', error); 
+  }
+};
+
   // Bloqueia apenas quando o status for Fechado ou Perdido
   const isBlocked = lead.status === 'Fechado' || lead.status === 'Perdido';
 
@@ -24,13 +42,14 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
     }
   })();
 
-  const handleConfirm = () => {
-    if (!status || status === 'Selecione o status') {
-      alert('Selecione um status antes de confirmar!');
-      return;
-    }
-    onUpdateStatus(lead.id, status);
-  };
+  const handleConfirm = () => { 
+  if (!status || status === 'Selecione o status') {
+    alert('Selecione um status antes de confirmar!');
+    return;
+  }
+  onUpdateStatus(lead.id, status);
+  enviarAtualizacaoParaSheets(); // <- Alterado para confirmar atualizacao
+};
 
   return (
     <div
