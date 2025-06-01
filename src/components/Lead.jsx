@@ -28,25 +28,24 @@ await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Be
 
 // Se for "Fechado" ou "Perdido", mover para a aba correta
 try {
-if (status === "Fechado" || status === "Perdido") {
-  await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
+  const res = await fetch(URL_DO_SCRIPT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       tipo: 'moverLead',
       payload: {
-        ID: lead.ID || lead.id, // Use sempre o mesmo nome que está na planilha
-      Status: lead.status // Deve ser exatamente "Fechado" ou "Perdido"
-    }
-  })
-});
+        ID: lead.ID || lead.id,
+        Status: lead.status
+      }
+    })
+  });
 
   const data = await res.json();
-console.log('Resposta moverLead:', data);
+  console.log('Resposta moverLead:', data);
 
-  } catch (error) {
-    console.error('Erro ao enviar atualização para o Google Sheets:', error); 
-  }
+} catch (error) {
+  console.error('Erro ao enviar atualização para o Google Sheets:', error); 
+}
 
   // Bloqueia apenas quando o status for Fechado ou Perdido
   const isBlocked = lead.status === 'Fechado' || lead.status === 'Perdido';
