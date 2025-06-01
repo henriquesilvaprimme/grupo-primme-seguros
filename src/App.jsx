@@ -37,9 +37,8 @@ const App = () => {
   const [senhaInput, setSenhaInput] = useState('');
   const [usuarioLogado, setUsuarioLogado] = useState(null);
 
-  // INÍCIO - sincronização leads via Google Sheets
   const [leads, setLeads] = useState([]);
-  const [leadSelecionado, setLeadSelecionado] = useState(null); // movido para cá para usar no useEffect
+  const [leadSelecionado, setLeadSelecionado] = useState(null);
 
   useEffect(() => {
     const fetchLeadsFromSheet = async () => {
@@ -67,7 +66,6 @@ const App = () => {
             createdAt: item.createdAt || new Date().toISOString(),
           }));
 
-          // Só atualiza leads se não houver lead selecionado para não atrapalhar o usuário
           if (!leadSelecionado) {
             setLeads(formattedLeads);
           }
@@ -85,52 +83,15 @@ const App = () => {
     };
 
     fetchLeadsFromSheet();
-
-    const interval = setInterval(() => {
-      fetchLeadsFromSheet();
-    }, 5000);
-
+    const interval = setInterval(fetchLeadsFromSheet, 5000);
     return () => clearInterval(interval);
   }, [leadSelecionado]);
-  // FIM - sincronização leads
 
   const [usuarios, setUsuarios] = useState([
-    {
-      id: 1,
-      usuario: '1', // login
-      nome: 'Administrador 1',
-      email: 'admin1@example.com',
-      senha: '1',
-      status: 'Ativo',
-      tipo: 'Admin',
-    },
-    {
-      id: 2,
-      usuario: 'maria', // login
-      nome: 'Maria Oliveira',
-      email: 'maria@example.com',
-      senha: 'senha123',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 3,
-      usuario: 'joao', // login
-      nome: 'João Souza',
-      email: 'joao@example.com',
-      senha: 'joaopass',
-      status: 'Ativo',
-      tipo: 'Usuario',
-    },
-    {
-      id: 4,
-      usuario: 'admin2', // login
-      nome: 'Administrador 2',
-      email: 'admin2@example.com',
-      senha: 'adminpass',
-      status: 'Ativo',
-      tipo: 'Admin',
-    },
+    { id: 1, usuario: '1', nome: 'Administrador 1', email: 'admin1@example.com', senha: '1', status: 'Ativo', tipo: 'Admin' },
+    { id: 2, usuario: 'maria', nome: 'Maria Oliveira', email: 'maria@example.com', senha: 'senha123', status: 'Ativo', tipo: 'Usuario' },
+    { id: 3, usuario: 'joao', nome: 'João Souza', email: 'joao@example.com', senha: 'joaopass', status: 'Ativo', tipo: 'Usuario' },
+    { id: 4, usuario: 'admin2', nome: 'Administrador 2', email: 'admin2@example.com', senha: 'adminpass', status: 'Ativo', tipo: 'Admin' },
   ]);
 
   const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
@@ -149,15 +110,9 @@ const App = () => {
 
     if (novoStatus === 'Fechado') {
       setUltimoFechadoId(id);
-      // Chamada ao GAS para mover lead para aba Leads Fechados
       postToSheet('fecharLead', { leadId: id });
     } else if (novoStatus === 'Perdido') {
-      // Se quiser mover para aba Perdidos também, pode ativar aqui
       postToSheet('perderLead', { leadId: id });
-    } else {
-      // Caso só queira editar status na mesma aba Leads, pode enviar edição completa
-      // postToSheet('editarLead', { id, status: novoStatus });
-      // Mas seu GAS não tem editarLead, então não envio nada aqui
     }
   };
 
@@ -167,7 +122,7 @@ const App = () => {
         lead.id === id ? { ...lead, insurer: seguradora } : lead
       )
     );
-    postToSheet('editarLead', { id, insurer: seguradora }); // seu GAS não tem editarLead, só editarUsuario. Se quiser, podemos ajustar GAS.
+    postToSheet('editarLead', { id, insurer: seguradora });
   };
 
   const confirmarSeguradoraLead = (id) => {
@@ -176,7 +131,7 @@ const App = () => {
         lead.id === id ? { ...lead, insurerConfirmed: true } : lead
       )
     );
-    postToSheet('editarLead', { id, insurerConfirmed: true }); // idem acima.
+    postToSheet('editarLead', { id, insurerConfirmed: true });
   };
 
   const atualizarDetalhesLeadFechado = (id, campo, valor) => {
@@ -185,7 +140,7 @@ const App = () => {
         lead.id === id ? { ...lead, [campo]: valor } : lead
       )
     );
-    postToSheet('editarLead', { id, [campo]: valor }); // idem acima.
+    postToSheet('editarLead', { id, [campo]: valor });
   };
 
   const transferirLead = (leadId, usuarioId) => {
@@ -194,7 +149,7 @@ const App = () => {
         lead.id === leadId ? { ...lead, usuarioId } : lead
       )
     );
-    postToSheet('editarLead', { id: leadId, usuarioId }); // idem acima.
+    postToSheet('editarLead', { id: leadId, usuarioId });
   };
 
   const atualizarStatusUsuario = (id, novoStatus = null, novoTipo = null) => {
@@ -214,11 +169,9 @@ const App = () => {
 
   const onAbrirLead = (lead) => {
     setLeadSelecionado(lead);
-
     let path = '/leads';
     if (lead.status === 'Fechado') path = '/leads-fechados';
     else if (lead.status === 'Perdido') path = '/leads-perdidos';
-
     navigate(path);
   };
 
@@ -270,7 +223,6 @@ const App = () => {
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
       <Sidebar isAdmin={isAdmin} nomeUsuario={loginInput} />
-
       <main style={{ flex: 1, overflow: 'auto' }}>
         <Routes>
           <Route
