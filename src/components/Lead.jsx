@@ -3,49 +3,53 @@ import React, { useState } from 'react';
 const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
   const [status, setStatus] = useState(lead.status || '');
 
-  const enviarAtualizacaoParaSheets = async () => { // <- Adicionado para atualizacao
+  const enviarAtualizacaoParaSheets = async () => {
   try {
-    // Atualiza o lead
-await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    tipo: 'editarLead',
-    payload: {
-      ID: lead.id,
-      name: lead.name,
-      vehicleModel: lead.vehicleModel,
-      vehicleYearModel: lead.vehicleYearModel,
-      city: lead.city,
-      phone: lead.phone,
-      insuranceType: lead.insuranceType,
-      Status: status,
-      Responsável: lead.vendedor || '',
-      data: lead.data || new Date().toISOString()
+    const urlScript = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
+
+    // Atualiza o lead na aba Leads
+    await fetch(urlScript, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipo: 'editarLead',
+        payload: {
+          ID: lead.id,
+          name: lead.name,
+          vehicleModel: lead.vehicleModel,
+          vehicleYearModel: lead.vehicleYearModel,
+          city: lead.city,
+          phone: lead.phone,
+          insuranceType: lead.insuranceType,
+          Status: status,
+          Responsável: lead.vendedor || '',
+          data: lead.data || new Date().toISOString()
+        }
+      })
+    });
+
+    // Se for "Fechado" ou "Perdido", mover para a aba correta
+    if (status === 'Fechado' || status === 'Perdido') {
+      const res = await fetch(urlScript, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: 'moverLead',
+          payload: {
+            ID: lead.id,
+            Status: status
+          }
+        })
+      });
+
+      const data = await res.json();
+      console.log('Resposta moverLead:', data);
     }
-  })
-});
 
-// Se for "Fechado" ou "Perdido", mover para a aba correta
-try {
-  const res = await fetch(URL_DO_SCRIPT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      tipo: 'moverLead',
-      payload: {
-        ID: lead.ID || lead.id,
-        Status: lead.status
-      }
-    })
-  });
-
-  const data = await res.json();
-  console.log('Resposta moverLead:', data);
-
-} catch (error) {
-  console.error('Erro ao enviar atualização para o Google Sheets:', error); 
-}
+  } catch (error) {
+    console.error('Erro ao enviar atualização para o Google Sheets:', error); 
+  }
+};
 
   // Bloqueia apenas quando o status for Fechado ou Perdido
   const isBlocked = lead.status === 'Fechado' || lead.status === 'Perdido';
