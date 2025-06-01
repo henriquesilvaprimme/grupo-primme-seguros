@@ -1,19 +1,62 @@
-const GOOGLE_SHEETS_SCRIPT_URL = 'COLE_AQUI_A_URL_DO_SEU_APPS_SCRIPT';
+const BASE_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
 
-async function chamarScript(tipo, payload) {
-  try {
-    const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipo, payload }),
-    });
-    const data = await response.json();
-    if (data.status !== 'sucesso') throw new Error(data.mensagem || 'Erro desconhecido');
-    return data;
-  } catch (error) {
-    console.error('Erro na chamada ao Apps Script:', error);
-    throw error;
-  }
+export async function buscarLeads() {
+  const res = await fetch(`${BASE_URL}?action=getLeads`);
+  const data = await res.json();
+  return data;
 }
 
-export { chamarScript };
+export async function fecharLead(leadId) {
+  const res = await fetch(BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo: 'fecharLead',
+      payload: { leadId },
+    }),
+  });
+  return await res.json();
+}
+
+export async function perderLead(leadId) {
+  const res = await fetch(BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo: 'perderLead',
+      payload: { leadId },
+    }),
+  });
+  return await res.json();
+}
+
+export async function editarLead(payload) {
+  const res = await fetch(BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo: 'editarLead',
+      payload,
+    }),
+  });
+  return await res.json();
+}
+
+export async function criarUsuario(payload) {
+  const res = await fetch(BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo: 'criarUsuario',
+      payload,
+    }),
+  });
+  return await res.json();
+}
+
+export async function editarUsuario(payload) {
+  const res = await fetch(BASE_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo: 'editarUsuario',
+      payload,
+    }),
+  });
+  return await res.json();
+}
