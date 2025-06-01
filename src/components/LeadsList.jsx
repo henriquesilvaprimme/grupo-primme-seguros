@@ -1,43 +1,53 @@
-// src/components/LeadsList.js
-import React, { useEffect, useState } from 'react';
-import { getLeads } from '../api/getLeads';
+import React, { useState } from 'react';
 
-function LeadsList() {
-  const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function LeadsList({ leads }) {
+  const [statusFilter, setStatusFilter] = useState('');
 
-  useEffect(() => {
-    async function fetchData() {
-      const result = await getLeads();
-      setLeads(result);
-      setLoading(false);
-    }
-    fetchData();
-  }, []);
+  const filteredLeads = leads.filter(lead =>
+    statusFilter === '' || (lead.status && lead.status.toLowerCase() === statusFilter.toLowerCase())
+  );
 
-  if (loading) return <p>Carregando leads...</p>;
+  const sortedLeads = filteredLeads.sort((a, b) => new Date(b.data) - new Date(a.data));
 
   return (
     <div>
-      <h2>Leads Recebidos</h2>
-      <table>
+      <label>
+        Filtrar por status:
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="">Todos</option>
+          <option value="fechado">Fechado</option>
+          <option value="perdido">Perdido</option>
+          <option value="em contato">Em contato</option>
+          <option value="sem contato">Sem contato</option>
+        </select>
+      </label>
+
+      <table border="1" cellPadding="5" cellSpacing="0" style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
         <thead>
           <tr>
             <th>Nome</th>
-            <th>Telefone</th>
+            <th>Modelo do Veículo</th>
+            <th>Ano do Veículo</th>
             <th>Cidade</th>
-            <th>Status</th>
+            <th>Telefone</th>
+            <th>Tipo de Seguro</th>
             <th>Data</th>
+            <th>Responsável</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
-          {leads.map((lead, idx) => (
-            <tr key={idx}>
-              <td>{lead.nome}</td>
-              <td>{lead.telefone}</td>
-              <td>{lead.cidade}</td>
-              <td>{lead.status}</td>
-              <td>{new Date(lead.data).toLocaleDateString()}</td>
+          {sortedLeads.map((lead) => (
+            <tr key={lead.id}>
+              <td>{lead.name}</td>
+              <td>{lead.vehiclemodel}</td>
+              <td>{lead.vehicleyearmodel}</td>
+              <td>{lead.city}</td>
+              <td>{lead.phone}</td>
+              <td>{lead.insurancetype}</td>
+              <td>{new Date(lead.data).toLocaleString()}</td>
+              <td>{lead.responsavel}</td>
+              <td>{lead.status || '-'}</td>
             </tr>
           ))}
         </tbody>
@@ -45,5 +55,3 @@ function LeadsList() {
     </div>
   );
 }
-
-export default LeadsList;
