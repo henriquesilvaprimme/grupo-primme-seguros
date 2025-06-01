@@ -46,7 +46,6 @@ console.log('Resposta moverLead:', data);
   } catch (error) {
     console.error('Erro ao enviar atualização para o Google Sheets:', error); 
   }
-};
 
   // Bloqueia apenas quando o status for Fechado ou Perdido
   const isBlocked = lead.status === 'Fechado' || lead.status === 'Perdido';
