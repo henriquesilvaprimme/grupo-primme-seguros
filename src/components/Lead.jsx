@@ -34,12 +34,12 @@ if (status === "Fechado" || status === "Perdido") {
     body: JSON.stringify({
       tipo: 'moverLead',
       payload: {
-        ID: lead.id,
-        Status: status
-      }
-    })
-  });
-}
+        ID: lead.ID || lead.id, // Use sempre o mesmo nome que está na planilha
+      Status: lead.status // Deve ser exatamente "Fechado" ou "Perdido"
+    }
+  })
+});
+
   } catch (error) {
     console.error('Erro ao enviar atualização para o Google Sheets:', error); 
   }
