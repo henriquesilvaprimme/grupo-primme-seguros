@@ -13,6 +13,22 @@ import Ranking from './pages/Ranking';
 
 const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
 
+const postToSheet = async (tipo, payload) => {
+  try {
+    const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo, payload }),
+    });
+    const data = await response.json();
+    if (data.status !== 'sucesso') {
+      console.error('Erro ao enviar dados para o GAS:', data.mensagem);
+    }
+  } catch (error) {
+    console.error('Erro na requisição para o GAS:', error);
+  }
+};
+
 const App = () => {
   const navigate = useNavigate();
 
@@ -121,6 +137,7 @@ const App = () => {
 
   const adicionarUsuario = (usuario) => {
     setUsuarios((prev) => [...prev, { ...usuario, id: prev.length + 1 }]);
+    postToSheet('criarUsuario', usuario);
   };
 
   const atualizarStatusLead = (id, novoStatus) => {
@@ -132,6 +149,15 @@ const App = () => {
 
     if (novoStatus === 'Fechado') {
       setUltimoFechadoId(id);
+      // Chamada ao GAS para mover lead para aba Leads Fechados
+      postToSheet('fecharLead', { leadId: id });
+    } else if (novoStatus === 'Perdido') {
+      // Se quiser mover para aba Perdidos também, pode ativar aqui
+      postToSheet('perderLead', { leadId: id });
+    } else {
+      // Caso só queira editar status na mesma aba Leads, pode enviar edição completa
+      // postToSheet('editarLead', { id, status: novoStatus });
+      // Mas seu GAS não tem editarLead, então não envio nada aqui
     }
   };
 
@@ -141,6 +167,7 @@ const App = () => {
         lead.id === id ? { ...lead, insurer: seguradora } : lead
       )
     );
+    postToSheet('editarLead', { id, insurer: seguradora }); // seu GAS não tem editarLead, só editarUsuario. Se quiser, podemos ajustar GAS.
   };
 
   const confirmarSeguradoraLead = (id) => {
@@ -149,6 +176,7 @@ const App = () => {
         lead.id === id ? { ...lead, insurerConfirmed: true } : lead
       )
     );
+    postToSheet('editarLead', { id, insurerConfirmed: true }); // idem acima.
   };
 
   const atualizarDetalhesLeadFechado = (id, campo, valor) => {
@@ -157,6 +185,7 @@ const App = () => {
         lead.id === id ? { ...lead, [campo]: valor } : lead
       )
     );
+    postToSheet('editarLead', { id, [campo]: valor }); // idem acima.
   };
 
   const transferirLead = (leadId, usuarioId) => {
@@ -165,6 +194,7 @@ const App = () => {
         lead.id === leadId ? { ...lead, usuarioId } : lead
       )
     );
+    postToSheet('editarLead', { id: leadId, usuarioId }); // idem acima.
   };
 
   const atualizarStatusUsuario = (id, novoStatus = null, novoTipo = null) => {
@@ -179,6 +209,7 @@ const App = () => {
           : usuario
       )
     );
+    postToSheet('editarUsuario', { id, status: novoStatus, tipo: novoTipo });
   };
 
   const onAbrirLead = (lead) => {
@@ -242,28 +273,30 @@ const App = () => {
 
       <main style={{ flex: 1, overflow: 'auto' }}>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route
-            path="/dashboard"
+            path="/"
             element={
-              <Dashboard
-                leads={
-                  isAdmin
-                    ? leads
-                    : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)
-                }
-              />
+              isAdmin ? (
+                <Dashboard
+                  leads={leads}
+                  usuarioLogado={usuarioLogado}
+                  atualizarStatusLead={atualizarStatusLead}
+                />
+              ) : (
+                <Navigate to="/leads" />
+              )
             }
           />
           <Route
             path="/leads"
             element={
               <Leads
-                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
-                usuarios={usuarios}
-                onUpdateStatus={atualizarStatusLead}
+                leads={leads}
+                onAbrirLead={onAbrirLead}
+                atualizarStatusLead={atualizarStatusLead}
+                leadSelecionado={leadSelecionado}
+                setLeadSelecionado={setLeadSelecionado}
                 transferirLead={transferirLead}
-                usuarioLogado={usuarioLogado}
               />
             }
           />
@@ -271,14 +304,13 @@ const App = () => {
             path="/leads-fechados"
             element={
               <LeadsFechados
-                leads={leads}
-                usuarios={usuarios}
-                onUpdateInsurer={atualizarSeguradoraLead}
-                onConfirmInsurer={confirmarSeguradoraLead}
-                onUpdateDetalhes={atualizarDetalhesLeadFechado}
-                ultimoFechadoId={ultimoFechadoId}
-                onAbrirLead={onAbrirLead}
+                leads={leads.filter((l) => l.status === 'Fechado')}
+                atualizarDetalhesLeadFechado={atualizarDetalhesLeadFechado}
+                atualizarStatusLead={atualizarStatusLead}
+                atualizarSeguradoraLead={atualizarSeguradoraLead}
+                confirmarSeguradoraLead={confirmarSeguradoraLead}
                 leadSelecionado={leadSelecionado}
+                setLeadSelecionado={setLeadSelecionado}
               />
             }
           />
@@ -286,30 +318,37 @@ const App = () => {
             path="/leads-perdidos"
             element={
               <LeadsPerdidos
-                leads={leads}
-                usuarios={usuarios}
-                onAbrirLead={onAbrirLead}
+                leads={leads.filter((l) => l.status === 'Perdido')}
+                atualizarStatusLead={atualizarStatusLead}
                 leadSelecionado={leadSelecionado}
+                setLeadSelecionado={setLeadSelecionado}
               />
             }
           />
-          <Route path="/buscar-lead" element={<BuscarLead leads={leads} />} />
-          {isAdmin && (
-            <>
-              <Route path="/criar-usuario" element={<CriarUsuario adicionarUsuario={adicionarUsuario} />} />
-              <Route
-                path="/usuarios"
-                element={
-                  <Usuarios
-                    usuarios={usuarios}
-                    atualizarStatusUsuario={atualizarStatusUsuario}
-                  />
-                }
+          <Route
+            path="/buscar-lead"
+            element={
+              <BuscarLead
+                leads={leads}
+                leadSelecionado={leadSelecionado}
+                setLeadSelecionado={setLeadSelecionado}
               />
-            </>
-          )}
-          <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
-          <Route path="*" element={<h1 style={{ padding: 20 }}>Página não encontrada</h1>} />
+            }
+          />
+          <Route
+            path="/criar-usuario"
+            element={<CriarUsuario adicionarUsuario={adicionarUsuario} />}
+          />
+          <Route
+            path="/usuarios"
+            element={
+              <Usuarios
+                usuarios={usuarios}
+                atualizarStatusUsuario={atualizarStatusUsuario}
+              />
+            }
+          />
+          <Route path="/ranking" element={<Ranking />} />
         </Routes>
       </main>
     </div>
