@@ -40,6 +40,9 @@ if (status === "Fechado" || status === "Perdido") {
   })
 });
 
+  const data = await res.json();
+console.log('Resposta moverLead:', data);
+
   } catch (error) {
     console.error('Erro ao enviar atualização para o Google Sheets:', error); 
   }
