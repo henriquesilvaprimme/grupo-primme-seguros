@@ -6,16 +6,24 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
   const enviarAtualizacaoParaSheets = async () => { // <- Adicionado para atualizacao
   try {
     await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: lead.id,
-        nome: lead.name,
-        status: status,
-        vendedor: lead.vendedor || '',
-        atualizadoEm: new Date().toISOString(),
-      })
-    });
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    tipo: 'editarLead',
+    payload: {
+      ID: lead.id,
+      name: lead.name,
+      vehicleModel: lead.vehicleModel,
+      vehicleYearModel: lead.vehicleYearModel,
+      city: lead.city,
+      phone: lead.phone,
+      insuranceType: lead.insuranceType,
+      Status: status,
+      Responsável: lead.vendedor || '', // ou "responsavel"
+      data: lead.data || new Date().toISOString()
+    }
+  })
+});
   } catch (error) {
     console.error('Erro ao enviar atualização para o Google Sheets:', error); 
   }
