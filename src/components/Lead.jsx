@@ -27,6 +27,7 @@ await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Be
 });
 
 // Se for "Fechado" ou "Perdido", mover para a aba correta
+try {
 if (status === "Fechado" || status === "Perdido") {
   await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
     method: 'POST',
