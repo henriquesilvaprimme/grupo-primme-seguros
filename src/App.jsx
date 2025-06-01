@@ -13,22 +13,6 @@ import Ranking from './pages/Ranking';
 
 const GOOGLE_SHEETS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
 
-const postToSheet = async (tipo, payload) => {
-  try {
-    const response = await fetch(GOOGLE_SHEETS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipo, payload }),
-    });
-    const data = await response.json();
-    if (data.status !== 'sucesso') {
-      console.error('Erro ao enviar dados para o GAS:', data.mensagem);
-    }
-  } catch (error) {
-    console.error('Erro na requisição para o GAS:', error);
-  }
-};
-
 const App = () => {
   const navigate = useNavigate();
 
@@ -37,8 +21,9 @@ const App = () => {
   const [senhaInput, setSenhaInput] = useState('');
   const [usuarioLogado, setUsuarioLogado] = useState(null);
 
+  // INÍCIO - sincronização leads via Google Sheets
   const [leads, setLeads] = useState([]);
-  const [leadSelecionado, setLeadSelecionado] = useState(null);
+  const [leadSelecionado, setLeadSelecionado] = useState(null); // movido para cá para usar no useEffect
 
   useEffect(() => {
     const fetchLeadsFromSheet = async () => {
@@ -50,8 +35,8 @@ const App = () => {
           const formattedLeads = data.map((item, index) => ({
             id: item.id ? Number(item.id) : index + 1,
             name: item.name || item.Name || '',
-            vehicleModel: item.vehicleModel || item.vehiclemodel || '',
-            vehicleYearModel: item.vehicleYearModel || '',
+            vehicleModel: item.vehiclemodel || item.vehicleModel || '',
+            vehicleYearModel: item.vehicleYearModel || item.vehicleYearModel || '',
             city: item.city || '',
             phone: item.phone || item.Telefone || '',
             insuranceType: item.insuranceType || '',
@@ -66,6 +51,7 @@ const App = () => {
             createdAt: item.createdAt || new Date().toISOString(),
           }));
 
+          // Só atualiza leads se não houver lead selecionado para não atrapalhar o usuário
           if (!leadSelecionado) {
             setLeads(formattedLeads);
           }
@@ -90,11 +76,12 @@ const App = () => {
 
     return () => clearInterval(interval);
   }, [leadSelecionado]);
+  // FIM - sincronização leads
 
   const [usuarios, setUsuarios] = useState([
     {
       id: 1,
-      usuario: '1',
+      usuario: '1', // login
       nome: 'Administrador 1',
       email: 'admin1@example.com',
       senha: '1',
@@ -103,7 +90,7 @@ const App = () => {
     },
     {
       id: 2,
-      usuario: 'maria',
+      usuario: 'maria', // login
       nome: 'Maria Oliveira',
       email: 'maria@example.com',
       senha: 'senha123',
@@ -112,7 +99,7 @@ const App = () => {
     },
     {
       id: 3,
-      usuario: 'joao',
+      usuario: 'joao', // login
       nome: 'João Souza',
       email: 'joao@example.com',
       senha: 'joaopass',
@@ -121,7 +108,7 @@ const App = () => {
     },
     {
       id: 4,
-      usuario: 'admin2',
+      usuario: 'admin2', // login
       nome: 'Administrador 2',
       email: 'admin2@example.com',
       senha: 'adminpass',
@@ -130,9 +117,10 @@ const App = () => {
     },
   ]);
 
+  const [ultimoFechadoId, setUltimoFechadoId] = useState(null);
+
   const adicionarUsuario = (usuario) => {
     setUsuarios((prev) => [...prev, { ...usuario, id: prev.length + 1 }]);
-    postToSheet('criarUsuario', usuario);
   };
 
   const atualizarStatusLead = (id, novoStatus) => {
@@ -143,9 +131,7 @@ const App = () => {
     );
 
     if (novoStatus === 'Fechado') {
-      postToSheet('fecharLead', { leadId: id });
-    } else if (novoStatus === 'Perdido') {
-      postToSheet('perderLead', { leadId: id });
+      setUltimoFechadoId(id);
     }
   };
 
@@ -155,7 +141,6 @@ const App = () => {
         lead.id === id ? { ...lead, insurer: seguradora } : lead
       )
     );
-    postToSheet('editarLead', { id, insurer: seguradora });
   };
 
   const confirmarSeguradoraLead = (id) => {
@@ -164,7 +149,6 @@ const App = () => {
         lead.id === id ? { ...lead, insurerConfirmed: true } : lead
       )
     );
-    postToSheet('editarLead', { id, insurerConfirmed: true });
   };
 
   const atualizarDetalhesLeadFechado = (id, campo, valor) => {
@@ -173,7 +157,6 @@ const App = () => {
         lead.id === id ? { ...lead, [campo]: valor } : lead
       )
     );
-    postToSheet('editarLead', { id, [campo]: valor });
   };
 
   const transferirLead = (leadId, usuarioId) => {
@@ -182,7 +165,6 @@ const App = () => {
         lead.id === leadId ? { ...lead, usuarioId } : lead
       )
     );
-    postToSheet('editarLead', { id: leadId, usuarioId });
   };
 
   const atualizarStatusUsuario = (id, novoStatus = null, novoTipo = null) => {
@@ -197,7 +179,6 @@ const App = () => {
           : usuario
       )
     );
-    postToSheet('editarUsuario', { id, status: novoStatus, tipo: novoTipo });
   };
 
   const onAbrirLead = (lead) => {
@@ -257,34 +238,32 @@ const App = () => {
 
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
-      <Sidebar isAdmin={isAdmin} nomeUsuario={usuarioLogado?.nome || ''} />
+      <Sidebar isAdmin={isAdmin} nomeUsuario={loginInput} />
 
       <main style={{ flex: 1, overflow: 'auto' }}>
         <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route
-            path="/"
+            path="/dashboard"
             element={
-              isAdmin ? (
-                <Dashboard
-                  leads={leads}
-                  usuarioLogado={usuarioLogado}
-                  atualizarStatusLead={atualizarStatusLead}
-                />
-              ) : (
-                <Navigate to="/leads" />
-              )
+              <Dashboard
+                leads={
+                  isAdmin
+                    ? leads
+                    : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)
+                }
+              />
             }
           />
           <Route
             path="/leads"
             element={
               <Leads
-                leads={leads.filter((l) => l.status !== 'Fechado' && l.status !== 'Perdido')}
-                onAbrirLead={onAbrirLead}
-                atualizarStatusLead={atualizarStatusLead}
-                leadSelecionado={leadSelecionado}
-                setLeadSelecionado={setLeadSelecionado}
+                leads={isAdmin ? leads : leads.filter((lead) => lead.usuarioId === usuarioLogado.id)}
+                usuarios={usuarios}
+                onUpdateStatus={atualizarStatusLead}
                 transferirLead={transferirLead}
+                usuarioLogado={usuarioLogado}
               />
             }
           />
@@ -292,13 +271,14 @@ const App = () => {
             path="/leads-fechados"
             element={
               <LeadsFechados
-                leads={leads.filter((l) => l.status === 'Fechado')}
-                atualizarDetalhesLeadFechado={atualizarDetalhesLeadFechado}
-                atualizarStatusLead={atualizarStatusLead}
-                atualizarSeguradoraLead={atualizarSeguradoraLead}
-                confirmarSeguradoraLead={confirmarSeguradoraLead}
+                leads={leads}
+                usuarios={usuarios}
+                onUpdateInsurer={atualizarSeguradoraLead}
+                onConfirmInsurer={confirmarSeguradoraLead}
+                onUpdateDetalhes={atualizarDetalhesLeadFechado}
+                ultimoFechadoId={ultimoFechadoId}
+                onAbrirLead={onAbrirLead}
                 leadSelecionado={leadSelecionado}
-                setLeadSelecionado={setLeadSelecionado}
               />
             }
           />
@@ -306,37 +286,30 @@ const App = () => {
             path="/leads-perdidos"
             element={
               <LeadsPerdidos
-                leads={leads.filter((l) => l.status === 'Perdido')}
-                atualizarStatusLead={atualizarStatusLead}
-                leadSelecionado={leadSelecionado}
-                setLeadSelecionado={setLeadSelecionado}
-              />
-            }
-          />
-          <Route
-            path="/buscar-lead"
-            element={
-              <BuscarLead
                 leads={leads}
-                leadSelecionado={leadSelecionado}
-                setLeadSelecionado={setLeadSelecionado}
-              />
-            }
-          />
-          <Route
-            path="/criar-usuario"
-            element={<CriarUsuario adicionarUsuario={adicionarUsuario} />}
-          />
-          <Route
-            path="/usuarios"
-            element={
-              <Usuarios
                 usuarios={usuarios}
-                atualizarStatusUsuario={atualizarStatusUsuario}
+                onAbrirLead={onAbrirLead}
+                leadSelecionado={leadSelecionado}
               />
             }
           />
-          <Route path="/ranking" element={<Ranking />} />
+          <Route path="/buscar-lead" element={<BuscarLead leads={leads} />} />
+          {isAdmin && (
+            <>
+              <Route path="/criar-usuario" element={<CriarUsuario adicionarUsuario={adicionarUsuario} />} />
+              <Route
+                path="/usuarios"
+                element={
+                  <Usuarios
+                    usuarios={usuarios}
+                    atualizarStatusUsuario={atualizarStatusUsuario}
+                  />
+                }
+              />
+            </>
+          )}
+          <Route path="/ranking" element={<Ranking usuarios={usuarios} leads={leads} />} />
+          <Route path="*" element={<h1 style={{ padding: 20 }}>Página não encontrada</h1>} />
         </Routes>
       </main>
     </div>
