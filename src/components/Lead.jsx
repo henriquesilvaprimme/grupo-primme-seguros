@@ -5,7 +5,8 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
 
   const enviarAtualizacaoParaSheets = async () => { // <- Adicionado para atualizacao
   try {
-    await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
+    // Atualiza o lead
+await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -19,11 +20,26 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
       phone: lead.phone,
       insuranceType: lead.insuranceType,
       Status: status,
-      Responsável: lead.vendedor || '', // ou "responsavel"
+      Responsável: lead.vendedor || '',
       data: lead.data || new Date().toISOString()
     }
   })
 });
+
+// Se for "Fechado" ou "Perdido", mover para a aba correta
+if (status === "Fechado" || status === "Perdido") {
+  await fetch('https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tipo: 'moverLead',
+      payload: {
+        ID: lead.id,
+        Status: status
+      }
+    })
+  });
+}
   } catch (error) {
     console.error('Erro ao enviar atualização para o Google Sheets:', error); 
   }
