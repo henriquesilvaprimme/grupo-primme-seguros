@@ -8,7 +8,7 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
     const urlScript = 'https://script.google.com/macros/s/AKfycbwgeZteouyVWzrCvgHHQttx-5Bekgs_k-5EguO9Sn2p-XFrivFg9S7_gGKLdoDfCa08/exec';
 
     // Atualiza o lead na aba Leads
-    await fetch(urlScript, {
+    const responseEditar = await fetch(urlScript, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -27,10 +27,11 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
         }
       })
     });
+    const dataEditar = await responseEditar.json();
+    console.log('Resposta editarLead:', dataEditar);
 
-    // Se for "Fechado" ou "Perdido", mover para a aba correta
     if (status === 'Fechado' || status === 'Perdido') {
-      const res = await fetch(urlScript, {
+      const responseMover = await fetch(urlScript, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -39,13 +40,24 @@ const Lead = ({ lead, onUpdateStatus, disabledConfirm }) => {
             ID: lead.id,
             Status: status
           }
+        })
+      });
+      const dataMover = await responseMover.json();
+      console.log('Resposta moverLead:', dataMover);
 
-      const data = await res.json();
-      console.log('Resposta moverLead:', data);
+      if (dataMover.success) {
+        // Só agora atualiza o estado local, se usar callback, chame aqui
+        onUpdateStatus(lead.id, status);
+      } else {
+        alert('Erro ao mover lead no backend');
+      }
+    } else {
+      // status normal, só atualiza local
+      onUpdateStatus(lead.id, status);
     }
-
   } catch (error) {
-    console.error('Erro ao enviar atualização para o Google Sheets:', error); 
+    console.error('Erro na comunicação com o backend:', error);
+    alert('Erro ao salvar lead. Tente novamente.');
   }
 };
 
